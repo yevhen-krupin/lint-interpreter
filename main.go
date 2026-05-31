@@ -4,27 +4,10 @@ import (
 	"fmt"
 )
 
-type TokenDefinition struct {
-	open  byte
-	close byte
-	kind  string
-}
-
-type Token struct {
-	kind       string
-	begin      int
-	end        int
-	valueBytes []byte
-}
-
 type Node struct {
 	kind  string
 	value string
 	nodes []*Node
-}
-
-type Expression struct {
-	terms []string
 }
 
 func main() {
@@ -43,12 +26,6 @@ func main() {
 		_, node, _ := atom_node(element, 0)
 		fmt.Printf("\nExpression %d", index)
 		print(node, 0)
-		// result, err := tokenize(element)
-		// if err != nil {
-		// fmt.Printf("\n[%d] error: %s", index, err.Error())
-		// } else {
-		// fmt.Printf("\n[%d] type: %s start: %d end: %d", index, result[0].kind, result[0].begin, result[0].end)
-		// }
 	}
 }
 
@@ -57,46 +34,6 @@ func print(node *Node, indent int) {
 	for _, n := range node.nodes {
 		print(n, indent+2)
 	}
-}
-
-func tokenize(input string) ([]*Token, error) {
-	var result []*Token
-	for pos := 0; pos < len(input); pos++ {
-		// while true here through the list of type definitions
-		success, token, i := process(input, pos)
-		if success {
-			result = append(result, token)
-			pos = i
-		}
-	}
-	return result, nil
-}
-
-func process(input string, pos int) (bool, *Token, int) {
-	definitions := []TokenDefinition{
-		{
-			kind:  "s-expression",
-			open:  '(',
-			close: ')',
-		},
-		{
-			kind:  "string-atom",
-			open:  '"',
-			close: '"',
-		},
-	}
-	for _, definition := range definitions {
-		b, token, i := extract(input, definition, pos)
-		if b == true {
-			return true, token, i
-		}
-
-		b, token, i = atom(input, pos)
-		if b == true {
-			return true, token, i
-		}
-	}
-	return false, nil, -1
 }
 
 func expression_node(input string, pos int) (bool, *Node, int) {
@@ -164,42 +101,4 @@ func node(kind string, value string, nodes []*Node) *Node {
 	node.value = value
 	node.nodes = nodes
 	return &node
-}
-
-func token(kind string, begin int, end int) *Token {
-	var tstr Token
-	tstr.kind = kind
-	tstr.begin = begin
-	tstr.end = end
-	return &tstr
-}
-
-func atom(input string, pos int) (bool, *Token, int) {
-	begin := pos
-	// fmt.Printf("\n fallback to atom at pos %d : %v", pos, input[pos])
-	for pos < len(input)+1 {
-		if pos == len(input) || input[pos] == ' ' {
-			// fmt.Printf("\n atom ends at pos %d", pos-1)
-			return true, token("atom", begin, pos-1), pos + 1
-		}
-		pos += 1
-	}
-	return false, nil, pos
-}
-
-func extract(input string, definition TokenDefinition, pos int) (bool, *Token, int) {
-	// fmt.Printf("\n definition %v expects %v, there is %v", definition.kind, definition.open, input[pos])
-	if input[pos] == definition.open {
-		begin := pos
-		pos += 1
-		// fmt.Printf("\n detected open %v of %v at pos %d", definition.open, definition.kind, pos)
-		for pos < len(input) {
-			if input[pos] == definition.close {
-				// fmt.Printf("\n detected close %v of %v at pos %d", definition.close, definition.kind, pos)
-				return true, token(definition.kind, begin, pos), pos + 1
-			}
-			pos += 1
-		}
-	}
-	return false, &Token{}, pos
 }
