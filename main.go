@@ -11,6 +11,7 @@ const (
 	Boolean ResultType = "Boolean"
 	String  ResultType = "String"
 	Int     ResultType = "Int"
+	Error   ResultType = "Error"
 	Unknown ResultType = "Unknown"
 )
 
@@ -19,6 +20,7 @@ type Kind string
 const (
 	Expression Kind = "Expression"
 	Atom       Kind = "Atom"
+	SymbolAtom Kind = "SymbolAtom"
 )
 
 type Node struct {
@@ -45,6 +47,10 @@ func main() {
 		"(+ 1 2)",
 		"(* 1 2)",
 		"(* 5 3)",
+		"(/ 5 5)",
+		"(/ 6 3)",
+		"(- 1 1)",
+		"(- 1 2)",
 		"(defun doublen (n) (* n 2))",
 		"(defun hello() \"Hello Coding Challenges\")",
 		"(format t \"Hello, Coding Challenge World World\")",
@@ -58,9 +64,13 @@ func main() {
 	for index, element := range array {
 		_, node, _ := atom_node(element, 0)
 		fmt.Printf("\nExpression %d: `%v`", index, element)
-		t, b, i, s := evaluate(node)
-		fmt.Printf("\nEvaluated as %v %t %d `%v`", t, b, i, s)
-		print(node, "")
+		t, b, i, s, err := evaluate(node)
+		if err != nil {
+			fmt.Printf("\nFailed to evaluate due to %v", err.Error())
+		} else {
+			fmt.Printf("\nEvaluated as %v %t %d `%v`", t, b, i, s)
+			print(node, "")
+		}
 		fmt.Printf("\n---------------")
 	}
 }
@@ -79,38 +89,82 @@ func print(node *Node, indent string) {
 	}
 }
 
-func evaluate(node *Node) (ResultType, bool, int, string) {
-	if node.Type == Int {
-		return Int, false, bytes_to_int32(node.Value), ""
+func get_operator_bytes(node *Node) ([]byte, error) {
+	if len(node.Nodes) < 1 || node.Nodes[0].Kind != Atom {
+		return []byte{}, fmt.Errorf("unable to get operator atom")
 	}
-	if node.Type == String {
-		return String, false, 0, string(node.Value)
-	}
-	if node.Type == Boolean {
-		return Boolean, node.Value[0] == 1, 0, ""
-	}
-	if node.Kind == Expression && len(node.Nodes) > 0 {
-		if node.Nodes[0].Kind == Atom && node.Nodes[0].Value[0] == '+' {
-			i := 1
-			r := 0
-			for i < len(node.Nodes) {
-				r += bytes_to_int32(node.Nodes[i].Value)
-				i += 1
-			}
-			return Int, false, r, ""
-		}
+	return node.Nodes[0].Value, nil
+}
 
-		if node.Nodes[0].Kind == Atom && node.Nodes[0].Value[0] == '*' {
-			i := 1
-			r := 1
-			for i < len(node.Nodes) {
-				r *= bytes_to_int32(node.Nodes[i].Value)
-				i += 1
-			}
-			return Int, false, r, ""
+func binary_operator_int(node *Node, f func(int, int) int) (ResultType, bool, int, string, error) {
+	a, e1 := operand_int(node, 1)
+	b, e2 := operand_int(node, 2)
+	if e1 != nil || e2 != nil {
+		return Error, false, 0, "", first_error(e1, e2)
+	}
+	return Int, false, f(a, b), "", nil
+}
+
+func operand_int(node *Node, index int) (int, error) {
+	r, _, i, _, e := evaluate(node.Nodes[index])
+	if r == Int {
+		return i, e
+	}
+	return 0, fmt.Errorf("Unable to evaluate operand from the node %v", node)
+}
+
+func first_error(input ...error) error {
+	for _, item := range input {
+		if item != nil {
+			return item
 		}
 	}
-	return Unknown, false, 0, ""
+	return nil
+}
+
+func evaluate(node *Node) (ResultType, bool, int, string, error) {
+	// int literal
+	if node.Type == Int {
+		return Int, false, bytes_to_int32(node.Value), "", nil
+	}
+	// string literal
+	if node.Type == String {
+		return String, false, 0, string(node.Value), nil
+	}
+	// boolean literal
+	if node.Type == Boolean {
+		return Boolean, node.Value[0] == 1, 0, "", nil
+	}
+	// resolve variable
+
+	// operators
+	if node.Kind == Expression && len(node.Nodes) > 0 {
+		oper, err := get_operator_bytes(node)
+		if err != nil {
+			return Error, false, 0, "", err
+		}
+		if oper[0] == '+' {
+			return binary_operator_int(node, func(a, b int) int {
+				return a + b
+			})
+		}
+		if oper[0] == '-' {
+			return binary_operator_int(node, func(a, b int) int {
+				return a - b
+			})
+		}
+		if oper[0] == '*' {
+			return binary_operator_int(node, func(a, b int) int {
+				return a * b
+			})
+		}
+		if oper[0] == '/' {
+			return binary_operator_int(node, func(a, b int) int {
+				return a / b
+			})
+		}
+	}
+	return Unknown, false, 0, "", nil
 }
 
 func expression_node(input string, pos int) (bool, *Node, int) {
@@ -179,7 +233,6 @@ func atom_node(input string, pos int) (bool, *Node, int) {
 		return r, n, p
 	}
 	// can handle more corner cases here
-
 	// extract atom
 	begin := pos
 	// get all while it is not a separator or an end of current expression or a begin of a new one
