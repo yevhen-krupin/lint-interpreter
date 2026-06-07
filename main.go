@@ -7,34 +7,6 @@ import (
 	"strings"
 )
 
-type ResultType string
-
-const (
-	Boolean ResultType = "Boolean"
-	String  ResultType = "String"
-	Int     ResultType = "Int"
-	Error   ResultType = "Error"
-	Unknown ResultType = "Unknown"
-)
-
-type Kind string
-
-const (
-	Expression          Kind = "Expression"
-	Atom                Kind = "Atom"
-	DeclarationAtom     Kind = "DeclarationAtom"
-	SymbolAtom          Kind = "SymbolAtom"
-	ArgumentsExpression Kind = "ArgumentsExpression"
-)
-
-type Node struct {
-	Kind          Kind
-	Type          ResultType
-	Value         []byte
-	Nodes         []*Node
-	ArgumentIndex int
-}
-
 type EvaluationResultValue any
 
 type EvaluationResult struct {
@@ -73,24 +45,6 @@ var Red = "\033[31m"
 var Green = "\033[32m"
 var Reset = "\033[0m"
 
-var array_int_test_cases = []TestCase[int]{
-	{"1", 1},
-	{"32", 32},
-	{"255", 255},
-	{"256", 256},
-	{"65536", 65536},
-	{"65537", 65537},
-	{"16777216", 16777216},
-	{"16777217", 16777217},
-	{"(+ 1 2)", 3},
-	{"(* 1 2)", 2},
-	{"(* 5 3)", 15},
-	{"(/ 5 5)", 1},
-	{"(/ 6 3)", 2},
-	{"(- 1 1)", 0},
-	{"(- 1 2)", -1},
-}
-
 func evaluate_test[T int | bool | string](name string, array []TestCase[T]) TestResult {
 	pass := 0
 	fail := 0
@@ -98,12 +52,12 @@ func evaluate_test[T int | bool | string](name string, array []TestCase[T]) Test
 		element_functions := []FunctionEntry{}
 		results := []EvaluationResult{}
 		nodes := []*Node{}
-		subs := strings.Split(element.input, "\n")
-		for _, sub_element := range subs {
-			_, node, functions, _ := atom_node(sub_element, 0, []FunctionEntry{})
-			nodes = append(nodes, node)
-			element_functions = slices.Concat(element_functions, functions)
-			r := evaluate_expression(node, element_functions)
+		subs := strings.SplitSeq(element.input, "\n")
+		for sub_element := range subs {
+			ast, _ := ParseAst(sub_element)
+			nodes = append(nodes, ast.Root)
+			element_functions = slices.Concat(element_functions, *ast.Functions)
+			r := evaluate_expression(ast.Root, element_functions)
 			results = append(results, r)
 			if r.Error != nil {
 				fmt.Printf("\nFailed to evaluate due to %v", r.Error.Error())
@@ -118,8 +72,8 @@ func evaluate_test[T int | bool | string](name string, array []TestCase[T]) Test
 				fmt.Printf("\n%vFAIL%v", Red, Reset)
 				fmt.Printf("\nEvaluated as %v: %v", r.Type, r.Value)
 				print(nodes[i], "")
-				fail += 1
 			}
+			fail += 1
 
 		} else {
 			pass += 1
@@ -150,7 +104,6 @@ func main() {
 			{"(/ 6 3)", 2},
 			{"(- 1 1)", 0},
 			{"(- 1 2)", -1},
-
 			{"(defun doublen (n) (* n 2))\n (doublen 2)", 4},
 		}),
 
@@ -163,6 +116,8 @@ func main() {
 		evaluate_test("string evaluation", []TestCase[string]{
 			{"\"Hello, Coding Challenges\"",
 				"\"Hello, Coding Challenges\""},
+			{"(defun hello() (\"Hello Coding Challenges\")\n(hello)",
+				"\"Hello Coding Challenges\""},
 		}),
 	}
 
@@ -183,8 +138,6 @@ func main() {
 	array := []string{
 		"()",
 		":CC",
-		"(defun doublen (n) (* n 2))",
-		"(defun hello() \"Hello Coding Challenges\")",
 		"(format t \"Hello, Coding Challenge World World\")",
 		"(defun fib (n)" +
 			"  (if (< n 2)" +
@@ -195,16 +148,16 @@ func main() {
 
 	for index, element := range array {
 		functions := []FunctionEntry{}
-		for _, sub_element := range strings.Split(element, "\n") {
-			_, node, f, _ := atom_node(sub_element, 0, []FunctionEntry{})
-			functions = slices.Concat(functions, f)
+		for sub_element := range strings.SplitSeq(element, "\n") {
+			ast, _ := ParseAst(sub_element)
+			functions = slices.Concat(functions, *ast.Functions)
 			fmt.Printf("\nExpression %d: `%v`", index, sub_element)
-			r := evaluate_expression(node, functions)
+			r := evaluate_expression(ast.Root, functions)
 			if r.Error != nil {
 				fmt.Printf("\nFailed to evaluate due to %v", r.Error.Error())
 			} else {
 				fmt.Printf("\nEvaluated as %v %v", r.Type, r.Value)
-				print(node, "")
+				print(ast.Root, "")
 			}
 			fmt.Printf("\n---------------")
 		}
@@ -259,7 +212,7 @@ func first_error(input ...error) error {
 }
 
 func evaluate_expression(node *Node, functions []FunctionEntry) EvaluationResult {
-	return evaluate(node, []StackFrame{StackFrame{Function: "__entry_point", Arguments: []Argument{}}}, functions)
+	return evaluate(node, []StackFrame{{Function: "__entry_point", Arguments: []Argument{}}}, functions)
 }
 
 // node: symbol atom of call site
@@ -285,7 +238,8 @@ func call_function(node *Node, stack []StackFrame, function FunctionEntry, funct
 			return EvaluationResult{Error: fmt.Errorf("the argument %v type provided to the function `%v` doesn't match declared function's argument type, expected: %v, actual: %v", string(function.Arguments.Nodes[i].Value), name, function.Arguments.Nodes[i].Type, args[i].Type)}
 		}
 	}
-	// fmt.Printf("calling function %v args %v body %v", name, args, function.Body)
+
+	//fmt.Printf("calling function %v args %v body %v", name, args, function.Body)
 	frame := StackFrame{name, args}
 	return evaluate(function.Body, append(stack, frame), functions)
 }
@@ -346,195 +300,10 @@ func evaluate(node *Node, stack []StackFrame, functions []FunctionEntry) Evaluat
 			})
 		}
 	}
+	// expression that just return something
+	if node.Kind == Expression && len(node.Nodes) == 1 {
+		return evaluate(node.Nodes[0], stack, functions)
+	}
+
 	return EvaluationResult{Unknown, nil, nil}
-}
-
-func expression_node(input string, pos int, functions []FunctionEntry) (bool, *Node, []FunctionEntry, int) {
-	for pos < len(input) && input[pos] == ' ' {
-		pos += 1
-	}
-	if input[pos] == '(' {
-		pos += 1
-		nodes := []*Node{}
-		types := []ResultType{}
-		for pos < len(input) && input[pos] != ')' {
-			// expression consists of atoms which can be other expressions, strings or basic atoms
-			r, node, functions2, p := atom_node(input, pos, functions)
-			// need to do it because atom_node returns functions and it can shadow existing variable
-			functions = functions2
-			if r {
-				pos = p
-				nodes = append(nodes, node)
-				if node.Type != Unknown {
-					types = append(types, node.Type)
-				}
-				// function declaration case
-				if node.Kind == DeclarationAtom {
-					// declaration := node
-					// extract name
-					r, node, functions, p = atom_node(input, pos, functions)
-					node.Kind = SymbolAtom
-					nodes = append(nodes, node)
-					pos = p
-					r2, arguments, body, p := extract_function(input, pos, functions)
-					if r2 {
-						// name symbol return type (function return type) corresponds body
-						node.Type = body.Type
-						nodes = append(nodes, arguments)
-						nodes = append(nodes, body)
-						pos = p
-						functions = append(functions, FunctionEntry{Name: string(node.Value), Body: body, Arguments: arguments})
-					}
-				}
-			}
-		}
-
-		if len(types) == 1 {
-			// if the expression consists of operator and operands, if one of the operands has type
-			// we can infer the type of the operand of unknown type
-			if slices.Index([]byte("+-*/"), nodes[0].Value[0]) > -1 {
-				// might want to setup nodes[0].Type = types[0]
-				for i := 1; i < len(nodes); i++ {
-					if nodes[i].Type == Unknown {
-						nodes[i].Type = types[0]
-					}
-				}
-			}
-			return true, node(Expression, []byte{}, types[0], nodes), functions, pos + 1
-		}
-		return true, node(Expression, []byte{}, Unknown, nodes), functions, pos + 1
-	}
-	return false, nil, functions, pos
-}
-
-func extract_function(input string, pos int, functions []FunctionEntry) (bool, *Node, *Node, int) {
-	// extract arguments
-	r, node, functions, p := expression_node(input, pos, functions)
-	if r {
-		node.Kind = ArgumentsExpression
-		arguments := node
-		args := []string{}
-		for _, arg := range node.Nodes {
-			arg.Kind = SymbolAtom
-			args = append(args, string(arg.Value))
-		}
-
-		// extract body
-		r, node, functions, p = expression_node(input, p, functions)
-		body := node
-		for _, n := range node.Nodes {
-			reference := slices.Index(args, string(n.Value))
-			if reference > -1 {
-				n.Kind = SymbolAtom
-				n.ArgumentIndex = reference
-				arguments.Nodes[reference].Type = n.Type
-			}
-		}
-		return true, arguments, body, p
-	} else {
-		return false, nil, nil, -1
-	}
-}
-
-func string_node(input string, pos int) (bool, *Node, int) {
-	if input[pos] == '"' {
-		begin := pos
-		// include open quote
-		pos += 1
-		for pos < len(input) && input[pos] != '"' {
-			pos += 1
-		}
-		// include closing quote
-		pos += 1
-		return true, node(Atom, []byte(input[begin:pos]), String, []*Node{}), pos + 1
-	}
-	return false, nil, pos
-}
-
-func int_node(input string) (bool, *Node) {
-	i, err := strconv.Atoi(input)
-	if err == nil {
-		return true, node(Atom, *int32_to_bytes(i), Int, []*Node{})
-	}
-	return false, nil
-}
-
-func bool_node(input string) (bool, *Node) {
-	if input == "t" || input == "T" {
-		return true, node(Atom, []byte{1}, Boolean, []*Node{})
-	}
-	if input == "nil" {
-		return true, node(Atom, []byte{0}, Boolean, []*Node{})
-	}
-	return false, nil
-}
-
-func decl_node(input string) (bool, *Node) {
-	if input == "defun" {
-		return true, node(DeclarationAtom, []byte(input), Unknown, []*Node{})
-	}
-	return false, nil
-}
-
-func atom_node(input string, pos int, functions []FunctionEntry) (bool, *Node, []FunctionEntry, int) {
-	// atoms are split by spaces
-	for pos < len(input) && input[pos] == ' ' {
-		pos += 1
-	}
-	// atom can be an expression consisting of other atoms/expressions
-	r, n, functions, p := expression_node(input, pos, functions)
-	if r {
-		return r, n, functions, p
-	}
-	// atom can be a string atom
-	r, n, p = string_node(input, pos)
-	if r {
-		return r, n, functions, p
-	}
-	// can handle more corner cases here
-	// extract atom
-	begin := pos
-	// get all while it is not a separator or an end of current expression or a begin of a new one
-	for pos < len(input) && input[pos] != ' ' && input[pos] != ')' && input[pos] != '(' {
-		pos += 1
-	}
-
-	val := input[begin:pos]
-	r, n = int_node(val)
-	if r {
-		return true, n, functions, pos
-	}
-	r, n = bool_node(val)
-	if r {
-		return true, n, functions, pos
-	}
-	r, n = decl_node(val)
-	if r {
-		return true, n, functions, pos
-	}
-
-	return true, node(Atom, []byte(input[begin:pos]), Unknown, []*Node{}), functions, pos //keep separator in the buffer
-}
-
-func node(kind Kind, value []byte, rt ResultType, nodes []*Node) *Node {
-	var node Node
-	node.Type = rt
-	node.Kind = kind
-	node.Value = value
-	node.Nodes = nodes
-	return &node
-}
-
-func int32_to_bytes(i int) *[]byte {
-	buf := make([]byte, 4)
-	buf[3] = byte(i & 0xFF)
-	buf[2] = byte((i & 0xFF00) >> 8)
-	buf[1] = byte((i & 0xFF0000) >> 16)
-	buf[0] = byte((i & 0xFF000000) >> 24)
-	return &buf
-}
-
-func bytes_to_int32(bytes []byte) int {
-	v := int(bytes[0])<<24 | int(bytes[1])<<16 | int(bytes[2])<<8 | int(bytes[3])
-	return v //bytes[0]*256*256*256 + bytes[1]*256*256 | bytes[2]*256 | bytes[3]
 }
