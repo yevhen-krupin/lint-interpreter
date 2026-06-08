@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type Parser struct {
 	Functions *[]FunctionEntry
-	Errors    []error
+	Errors    *[]error
 	Position  int
 	Input     string
 }
@@ -18,10 +19,10 @@ type Ast struct {
 }
 
 func ParseAst(input string) (Ast, []error) {
-	p := Parser{&[]FunctionEntry{}, []error{}, 0, input}
+	p := Parser{&[]FunctionEntry{}, &[]error{}, 0, input}
 	_, node := p.atom_node()
 
-	return Ast{p.Functions, node}, []error{}
+	return Ast{p.Functions, node}, *p.Errors
 }
 
 func (p *Parser) in() bool {
@@ -93,6 +94,10 @@ func (p *Parser) atom_node() (bool, *Node) {
 	if r {
 		return true, n
 	}
+	// binary operator
+	if len(val) == 1 && strings.Contains("+-*/", val) {
+		return true, node(BinaryOperator, []byte(val), Unknown, []*Node{})
+	}
 	return true, node(Atom, []byte(val), Unknown, []*Node{})
 }
 
@@ -152,12 +157,12 @@ func (p *Parser) extract_function() (bool, *Node, *Node) {
 	// extract arguments
 	r, arguments := p.expression_node()
 
-	fmt.Printf("\nextracted arguments: %v", arguments)
+	// fmt.Printf("\nextracted arguments: %v", arguments)
 	if r {
 		arguments.Kind = ArgumentsExpression
 		args := []string{}
 		for _, arg := range arguments.Nodes {
-			arg.Kind = SymbolAtom
+			arg.Kind = ArgumentDeclaration
 			args = append(args, string(arg.Value))
 		}
 
@@ -169,18 +174,37 @@ func (p *Parser) extract_function() (bool, *Node, *Node) {
 		}
 
 		// reference beteween the nodes inside of the body to the arguments
-		// todo: more depth
-		for _, n := range body.Nodes {
-			reference := slices.Index(args, string(n.Value))
-			if reference > -1 {
-				n.Kind = SymbolAtom
-				n.ArgumentIndex = reference
-				arguments.Nodes[reference].Type = n.Type
-			}
-		}
+		p.setup_argument_references(body, arguments)
 		return true, arguments, body
 	}
 	return false, nil, nil
+}
+
+func (p Parser) record_error(err error) {
+	*p.Errors = append(*p.Errors, err)
+}
+
+func (p Parser) setup_argument_references(node *Node, arguments *Node) {
+	for _, n := range node.Nodes {
+		for i, a := range arguments.Nodes {
+			// the argument name corresponds the atom
+			if slices.Equal(a.Value, n.Value) {
+				n.Kind = ArgumentVariable
+				// fmt.Printf("\nargument reference setup for %v to %v", a, n)
+				n.ArgumentIndex = i
+				if a.Type == Unknown {
+					a.Type = n.Type
+				} else {
+					if a.Type != n.Type {
+						p.record_error(fmt.Errorf("Inconsistent typing of argument %v", string(a.Value)))
+					}
+				}
+			}
+		}
+		if len(n.Nodes) > 0 {
+			p.setup_argument_references(n, arguments)
+		}
+	}
 }
 
 func (p *Parser) string_node() (bool, *Node) {

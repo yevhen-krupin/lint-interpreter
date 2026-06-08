@@ -11,5 +11,5 @@ func int32_to_bytes(i int) *[]byte {
 
 func bytes_to_int32(bytes []byte) int {
 	v := int(bytes[0])<<24 | int(bytes[1])<<16 | int(bytes[2])<<8 | int(bytes[3])
-	return v //bytes[0]*256*256*256 + bytes[1]*256*256 | bytes[2]*256 | bytes[3]
+	return v
 }

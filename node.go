@@ -17,12 +17,16 @@ const (
 
 type Kind string
 
+// todo: add more kinds: argument, body, call site
 const (
 	Expression          Kind = "Expression"
 	Atom                Kind = "Atom"
 	DeclarationAtom     Kind = "DeclarationAtom"
 	SymbolAtom          Kind = "SymbolAtom"
 	ArgumentsExpression Kind = "ArgumentsExpression"
+	BinaryOperator      Kind = "BinaryOperator"
+	ArgumentDeclaration Kind = "ArgumentDeclaration"
+	ArgumentVariable    Kind = "ArgumentVariable"
 )
 
 type Node struct {
