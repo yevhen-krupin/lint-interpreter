@@ -88,7 +88,7 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 }
 
 func (r Runtime) get_operator_bytes(node *Node) ([]byte, error) {
-	if len(node.Nodes) < 1 /*|| node.Nodes[0].Kind != Atom*/ {
+	if len(node.Nodes) < 1 && node.Nodes[0].Kind == BinaryOperator {
 		return []byte{}, fmt.Errorf("unable to get operator atom %v", node.Value)
 	}
 	return node.Nodes[0].Value, nil

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"slices"
-	"strings"
 )
 
 type Parser struct {
@@ -20,7 +19,7 @@ type Ast struct {
 
 func ParseAst(input string) (Ast, []error) {
 	p := Parser{&[]FunctionEntry{}, &[]error{}, 0, input}
-	_, node := p.atom_node()
+	node := p.atom_node()
 
 	return Ast{p.Functions, node}, *p.Errors
 }
@@ -58,50 +57,49 @@ func (p *Parser) eat_value() string {
 	return p.Input[begin:p.Position]
 }
 
-type NodeFunction func() *Node
-
-// todo
-// func coalesce(funcs ...func() *Node) *Node {
-// for f := range funcs {
-// n := f()
-// }
-// }
-
-func (p *Parser) atom_node() (bool, *Node) {
-	p.trim()
-	// atom can be an expression consisting of other atoms/expressions
-	r, n := p.expression_node()
-	if r {
-		return r, n
+func coalesce(nodes ...func() *Node) *Node {
+	for _, f := range nodes {
+		n := f()
+		if n != nil {
+			return n
+		}
 	}
-	// atom can be a string atom
-	r, n = p.string_node()
-	if r {
-		return r, n
-	}
-	// can handle more corner cases here
-	// extract atom
-	val := p.eat_value()
-	r, n = int_node(val)
-	if r {
-		return true, n
-	}
-	r, n = bool_node(val)
-	if r {
-		return true, n
-	}
-	r, n = decl_node(val)
-	if r {
-		return true, n
-	}
-	// binary operator
-	if len(val) == 1 && strings.Contains("+-*/", val) {
-		return true, node(BinaryOperator, []byte(val), Unknown, []*Node{})
-	}
-	return true, node(Atom, []byte(val), Unknown, []*Node{})
+	return nil
 }
 
-func (p *Parser) expression_node() (bool, *Node) {
+func (p *Parser) atom_node() *Node {
+	p.trim()
+	return coalesce(
+		// atom can be an expression consisting of other atoms/expressions, it can contain strings and other stuff from below
+		func() *Node { return p.expression_node() },
+		// atom can be a string, string can contain other stuff from below
+		func() *Node { return p.string_node() },
+		// can handle more corner cases here
+		// eat value and extract atom
+		func() *Node { return p.eat_atom() },
+	)
+}
+
+func (p *Parser) eat_atom() *Node {
+	val := p.eat_value()
+	return coalesce(
+		func() *Node { return int_node(val) },
+		func() *Node { return bool_node(val) },
+		func() *Node { return decl_node(val) },
+		func() *Node { return p.binary_operator_node(val) },
+		// fallback
+		func() *Node { return node(Atom, []byte(val), Unknown, []*Node{}) },
+	)
+}
+
+func (p *Parser) binary_operator_node(s string) *Node {
+	if len(s) == 1 && s[0] == '+' || s[0] == '-' || s[0] == '*' || s[0] == '/' {
+		return node(BinaryOperator, []byte(s), Unknown, []*Node{})
+	}
+	return nil
+}
+
+func (p *Parser) expression_node() *Node {
 	p.trim()
 	if p.is('(') {
 		p.drop()
@@ -109,8 +107,8 @@ func (p *Parser) expression_node() (bool, *Node) {
 		types := []ResultType{}
 		for p.isnt(')') {
 			// expression consists of atoms which can be other expressions, strings or basic atoms
-			r, node := p.atom_node()
-			if r {
+			node := p.atom_node()
+			if node != nil {
 				nodes = append(nodes, node)
 				if node.Type != Unknown {
 					types = append(types, node.Type)
@@ -119,11 +117,11 @@ func (p *Parser) expression_node() (bool, *Node) {
 				if node.Kind == DeclarationAtom {
 					// declaration := node
 					// extract name
-					r, node = p.atom_node()
+					node = p.atom_node()
 					node.Kind = SymbolAtom
 					nodes = append(nodes, node)
-					r2, arguments, body := p.extract_function()
-					if r2 {
+					arguments, body := p.extract_function()
+					if arguments != nil && body != nil {
 						// name symbol return type (function return type) corresponds body
 						node.Type = body.Type
 						nodes = append(nodes, arguments)
@@ -146,19 +144,19 @@ func (p *Parser) expression_node() (bool, *Node) {
 					}
 				}
 			}
-			return true, node(Expression, []byte{}, types[0], nodes)
+			return node(Expression, []byte{}, types[0], nodes)
 		}
-		return true, node(Expression, []byte{}, Unknown, nodes)
+		return node(Expression, []byte{}, Unknown, nodes)
 	}
-	return false, nil
+	return nil
 }
 
-func (p *Parser) extract_function() (bool, *Node, *Node) {
+func (p *Parser) extract_function() (*Node, *Node) {
 	// extract arguments
-	r, arguments := p.expression_node()
+	arguments := p.expression_node()
 
 	// fmt.Printf("\nextracted arguments: %v", arguments)
-	if r {
+	if arguments != nil {
 		arguments.Kind = ArgumentsExpression
 		args := []string{}
 		for _, arg := range arguments.Nodes {
@@ -167,17 +165,17 @@ func (p *Parser) extract_function() (bool, *Node, *Node) {
 		}
 
 		// extract body
-		r2, body := p.expression_node()
+		body := p.expression_node()
 		fmt.Printf("\nextracted body: %v", body)
-		if r2 == false {
-			return false, nil, nil
+		if body == nil {
+			return nil, nil
 		}
 
 		// reference beteween the nodes inside of the body to the arguments
 		p.setup_argument_references(body, arguments)
-		return true, arguments, body
+		return arguments, body
 	}
-	return false, nil, nil
+	return nil, nil
 }
 
 func (p Parser) record_error(err error) {
@@ -207,7 +205,7 @@ func (p Parser) setup_argument_references(node *Node, arguments *Node) {
 	}
 }
 
-func (p *Parser) string_node() (bool, *Node) {
+func (p *Parser) string_node() *Node {
 	if p.is('"') {
 		begin := p.Position
 		// include open quote
@@ -217,7 +215,7 @@ func (p *Parser) string_node() (bool, *Node) {
 		}
 		// include closing quote
 		p.drop()
-		return true, node(Atom, []byte(p.Input[begin:p.Position]), String, []*Node{})
+		return node(Atom, []byte(p.Input[begin:p.Position]), String, []*Node{})
 	}
-	return false, nil
+	return nil
 }
