@@ -1,8 +1,7 @@
 package main
 
 import (
-	//"fmt"
-	"strconv"
+// "fmt"
 )
 
 type ResultType string
@@ -35,31 +34,6 @@ type Node struct {
 	Value         []byte
 	Nodes         []*Node
 	ArgumentIndex int
-}
-
-func int_node(input string) *Node {
-	i, err := strconv.Atoi(input)
-	if err == nil {
-		return node(Atom, *int32_to_bytes(i), Int, []*Node{})
-	}
-	return nil
-}
-
-func bool_node(input string) *Node {
-	if input == "t" || input == "T" {
-		return node(Atom, []byte{1}, Boolean, []*Node{})
-	}
-	if input == "nil" {
-		return node(Atom, []byte{0}, Boolean, []*Node{})
-	}
-	return nil
-}
-
-func decl_node(input string) *Node {
-	if input == "defun" {
-		return node(DeclarationAtom, []byte(input), Unknown, []*Node{})
-	}
-	return nil
 }
 
 func node(kind Kind, value []byte, rt ResultType, nodes []*Node) *Node {

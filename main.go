@@ -174,3 +174,14 @@ func print(node *Node, indent string) {
 		print(n, indent+"  ")
 	}
 }
+
+func coalesce[TIn any, TOut comparable](in TIn, nodes ...func(TIn) TOut) TOut {
+	var zero TOut
+	for _, f := range nodes {
+		n := f(in)
+		if n != zero {
+			return n
+		}
+	}
+	return zero
+}

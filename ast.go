@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"slices"
+	"strconv"
 )
 
 type Parser struct {
@@ -24,79 +25,28 @@ func ParseAst(input string) (Ast, []error) {
 	return Ast{p.Functions, node}, *p.Errors
 }
 
-func (p *Parser) in() bool {
-	return p.Position < len(p.Input)
-}
-
-func (p *Parser) is(char byte) bool {
-	return p.in() && p.Input[p.Position] == char
-}
-
-func (p *Parser) isnt(char byte) bool {
-	return p.in() && !p.is(char)
-}
-
-func (p *Parser) drop() {
-	p.Position += 1
-}
-
-func (p *Parser) trim() {
-	// atoms are split by spaces
-	for p.is(' ') {
-		p.drop()
-	}
-}
-
-func (p *Parser) eat_value() string {
-	begin := p.Position
-	// get all while it is not a separator or an end of current expression or a begin of a new one
-	for p.isnt(' ') && p.isnt(')') && p.isnt('(') {
-		p.drop()
-	}
-
-	return p.Input[begin:p.Position]
-}
-
-func coalesce(nodes ...func() *Node) *Node {
-	for _, f := range nodes {
-		n := f()
-		if n != nil {
-			return n
-		}
-	}
-	return nil
-}
-
 func (p *Parser) atom_node() *Node {
 	p.trim()
 	return coalesce(
+		p,
 		// atom can be an expression consisting of other atoms/expressions, it can contain strings and other stuff from below
-		func() *Node { return p.expression_node() },
+		(*Parser).expression_node,
 		// atom can be a string, string can contain other stuff from below
-		func() *Node { return p.string_node() },
+		(*Parser).string_node,
 		// can handle more corner cases here
-		// eat value and extract atom
-		func() *Node { return p.eat_atom() },
-	)
-}
 
-func (p *Parser) eat_atom() *Node {
-	val := p.eat_value()
-	return coalesce(
-		func() *Node { return int_node(val) },
-		func() *Node { return bool_node(val) },
-		func() *Node { return decl_node(val) },
-		func() *Node { return p.binary_operator_node(val) },
-		// fallback
-		func() *Node { return node(Atom, []byte(val), Unknown, []*Node{}) },
-	)
-}
+		// extract atom of basic type
+		(*Parser).int_node,
+		(*Parser).bool_node,
 
-func (p *Parser) binary_operator_node(s string) *Node {
-	if len(s) == 1 && s[0] == '+' || s[0] == '-' || s[0] == '*' || s[0] == '/' {
-		return node(BinaryOperator, []byte(s), Unknown, []*Node{})
-	}
-	return nil
+		// extract declaration
+		(*Parser).decl_node,
+
+		// extract binary operators
+		(*Parser).binary_operator_node,
+		//fallback
+		(*Parser).undefined_node,
+	)
 }
 
 func (p *Parser) expression_node() *Node {
@@ -178,10 +128,6 @@ func (p *Parser) extract_function() (*Node, *Node) {
 	return nil, nil
 }
 
-func (p Parser) record_error(err error) {
-	*p.Errors = append(*p.Errors, err)
-}
-
 func (p Parser) setup_argument_references(node *Node, arguments *Node) {
 	for _, n := range node.Nodes {
 		for i, a := range arguments.Nodes {
@@ -218,4 +164,90 @@ func (p *Parser) string_node() *Node {
 		return node(Atom, []byte(p.Input[begin:p.Position]), String, []*Node{})
 	}
 	return nil
+}
+
+func (p *Parser) int_node() *Node {
+	i, err := strconv.Atoi(p.peek_token())
+	if err == nil {
+		p.drop_token()
+		return node(Atom, *int32_to_bytes(i), Int, []*Node{})
+	}
+	return nil
+}
+
+func (p *Parser) bool_node() *Node {
+	if p.peek_token() == "t" || p.peek_token() == "T" {
+		p.drop_token()
+		return node(Atom, []byte{1}, Boolean, []*Node{})
+	}
+	if p.peek_token() == "nil" {
+		p.drop_token()
+		return node(Atom, []byte{0}, Boolean, []*Node{})
+	}
+	return nil
+}
+
+func (p *Parser) decl_node() *Node {
+	if p.peek_token() == "defun" {
+		return node(DeclarationAtom, []byte(p.drop_token()), Unknown, []*Node{})
+	}
+	return nil
+}
+
+func (p *Parser) binary_operator_node() *Node {
+	if p.peek_token() == "+" || p.peek_token() == "-" || p.peek_token() == "*" || p.peek_token() == "/" {
+		return node(BinaryOperator, p.drop_token(), Unknown, []*Node{})
+	}
+	return nil
+}
+
+func (p *Parser) peek_token() string {
+	begin := p.Position
+	// get all while it is not a separator or an end of current expression or a begin of a new one
+	for p.isnt(' ') && p.isnt(')') && p.isnt('(') {
+		p.drop()
+	}
+	end := p.Position
+	p.Position = begin
+	return p.Input[begin:end]
+}
+
+func (p *Parser) undefined_node() *Node {
+	return node(Atom, []byte(p.drop_token()), Unknown, []*Node{})
+}
+
+func (p *Parser) drop_token() []byte {
+	begin := p.Position
+	// get all while it is not a separator or an end of current expression or a begin of a new one
+	for p.isnt(' ') && p.isnt(')') && p.isnt('(') {
+		p.drop()
+	}
+	return []byte(p.Input[begin:p.Position])
+}
+
+func (p Parser) record_error(err error) {
+	*p.Errors = append(*p.Errors, err)
+}
+
+func (p *Parser) in() bool {
+	return p.Position < len(p.Input)
+}
+
+func (p *Parser) is(char byte) bool {
+	return p.in() && p.Input[p.Position] == char
+}
+
+func (p *Parser) isnt(char byte) bool {
+	return p.in() && !p.is(char)
+}
+
+func (p *Parser) drop() {
+	p.Position += 1
+}
+
+func (p *Parser) trim() {
+	// atoms are split by spaces
+	for p.is(' ') {
+		p.drop()
+	}
 }
