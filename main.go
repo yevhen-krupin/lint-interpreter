@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -30,7 +31,7 @@ type FunctionEntry struct {
 	Arguments *Node
 }
 
-type TestCase[T int | bool | string] struct {
+type TestCase[T int | bool | string | []*Token] struct {
 	input  string
 	output T
 }
@@ -43,6 +44,27 @@ type TestResult struct {
 var Red = "\033[31m"
 var Green = "\033[32m"
 var Reset = "\033[0m"
+
+func tokenizer_test(array []TestCase[[]*Token]) TestResult {
+	pass := 0
+	fail := 0
+	for index, element := range array {
+		tokens := slices.Collect(tokenize(element.input))
+		if !eq(tokens, element.output) {
+			fmt.Printf("\nInput: %d: `%v`", index, element.input)
+			fmt.Printf("\n%vFAIL%v", Red, Reset)
+			fmt.Printf("\nTokenized as %v, expected %v", TokenStream(tokens), TokenStream(element.output))
+			fail += 1
+		} else {
+			pass += 1
+			fmt.Printf("\n%vPASS%v", Green, Reset)
+		}
+		fmt.Printf("\n---------------")
+	}
+
+	fmt.Printf("\n[%v] result: %v Pass %d | %v Fail %d | %v Total %d", "tokenizer", Green, pass, Red, fail, Reset, pass+fail)
+	return TestResult{pass, fail}
+}
 
 func evaluate_test[T int | bool | string](name string, array []TestCase[T]) TestResult {
 	pass := 0
@@ -64,10 +86,11 @@ func evaluate_test[T int | bool | string](name string, array []TestCase[T]) Test
 		final := results[len(results)-1]
 
 		if final.Value != element.output {
+
+			fmt.Printf("\nInput: %d: `%v`", index, element.input)
+			fmt.Printf("\n%vFAIL%v", Red, Reset)
 			fmt.Printf("\nFunctions declared: %v", runtime.Functions)
 			for i, r := range results {
-				fmt.Printf("\nExpression %d: `%v`", index, element.input)
-				fmt.Printf("\n%vFAIL%v", Red, Reset)
 				fmt.Printf("\nEvaluated as %v: %v", r.Type, r.Value)
 				print(nodes[i], "")
 			}
@@ -86,6 +109,24 @@ func evaluate_test[T int | bool | string](name string, array []TestCase[T]) Test
 
 func main() {
 	results := []TestResult{
+		tokenizer_test(
+			[]TestCase[[]*Token]{
+				{"1", t(d(1))},
+				{"32", t(d(32))},
+				{"255", t(d(255))},
+				{"256", t(d(256))},
+				{"16777217", t(d(16777217))},
+				{"(+ 1 2)", t(so(), o('+'), d(1), d(2), sc())},
+				{"(- 1 2)", t(so(), o('-'), d(1), d(2), sc())},
+				{"(* 1 2)", t(so(), o('*'), d(1), d(2), sc())},
+				{"(/ 1 2)", t(so(), o('/'), d(1), d(2), sc())},
+				{"(/1 2)", t(so(), o('/'), d(1), d(2), sc())},
+				{"(/ 1 2 )", t(so(), o('/'), d(1), d(2), sc())},
+				{"( / 1 2)", t(so(), o('/'), d(1), d(2), sc())},
+				{"(defun doublen (n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen (n) (* n 2))\n (doublen 2)", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc(), so(), i("doublen"), d(2), sc())},
+			},
+		),
 		evaluate_test("int evaluation", []TestCase[int]{
 			{"1", 1},
 			{"32", 32},
@@ -173,6 +214,52 @@ func print(node *Node, indent string) {
 	for _, n := range node.Nodes {
 		print(n, indent+"  ")
 	}
+}
+
+func so() *Token {
+	return &Token{ScopeOpen, []byte{'('}, Unknown}
+}
+
+func sc() *Token {
+	return &Token{ScopeClose, []byte{')'}, Unknown}
+}
+
+func o(ch byte) *Token {
+	return &Token{Operator, []byte{ch}, Unknown}
+}
+
+func t(args ...*Token) []*Token {
+	return args
+}
+
+func d(i int) *Token {
+	return &Token{Literal, []byte(strconv.Itoa(i)), Int}
+}
+
+func f() *Token {
+	return &Token{Declaration, []byte("defun"), Unknown}
+}
+
+func i(s string) *Token {
+	return &Token{Identifier, []byte(s), Unknown}
+}
+
+func eq(a []*Token, b []*Token) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, e := range a {
+		if e.TokenKind != b[i].TokenKind || e.Type != b[i].Type {
+			return false
+		}
+		for j, ch := range e.Value {
+			if ch != b[i].Value[j] {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func coalesce[TIn any, TOut comparable](in TIn, nodes ...func(TIn) TOut) TOut {
