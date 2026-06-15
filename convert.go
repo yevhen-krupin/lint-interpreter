@@ -1,12 +1,12 @@
 package main
 
-func int32_to_bytes(i int) *[]byte {
+func int32_to_bytes(i int) []byte {
 	buf := make([]byte, 4)
 	buf[3] = byte(i & 0xFF)
 	buf[2] = byte((i & 0xFF00) >> 8)
 	buf[1] = byte((i & 0xFF0000) >> 16)
 	buf[0] = byte((i & 0xFF000000) >> 24)
-	return &buf
+	return buf
 }
 
 func bytes_to_int32(bytes []byte) int {

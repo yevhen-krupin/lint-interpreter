@@ -3,14 +3,13 @@ package main
 import (
 	"fmt"
 	"slices"
-	"strconv"
 )
 
 type Parser struct {
 	Functions *[]FunctionEntry
 	Errors    *[]error
 	Position  int
-	Input     string
+	Input     []*Token
 }
 
 type Ast struct {
@@ -19,25 +18,19 @@ type Ast struct {
 }
 
 func ParseAst(input string) (Ast, []error) {
-	p := Parser{&[]FunctionEntry{}, &[]error{}, 0, input}
+	p := Parser{&[]FunctionEntry{}, &[]error{}, 0, slices.Collect(tokenize(input))}
 	node := p.atom_node()
 
 	return Ast{p.Functions, node}, *p.Errors
 }
 
 func (p *Parser) atom_node() *Node {
-	p.trim()
 	return coalesce(
 		p,
 		// atom can be an expression consisting of other atoms/expressions, it can contain strings and other stuff from below
 		(*Parser).expression_node,
-		// atom can be a string, string can contain other stuff from below
-		(*Parser).string_node,
-		// can handle more corner cases here
-
-		// extract atom of basic type
-		(*Parser).int_node,
-		(*Parser).bool_node,
+		// atom can be a literal: string, int, boolean
+		(*Parser).literal_node,
 
 		// extract declaration
 		(*Parser).decl_node,
@@ -50,12 +43,12 @@ func (p *Parser) atom_node() *Node {
 }
 
 func (p *Parser) expression_node() *Node {
-	p.trim()
-	if p.is('(') {
-		p.drop()
+	if p.peek().TokenKind == ScopeOpen {
+		p.eat()
 		nodes := []*Node{}
 		types := []ResultType{}
-		for p.isnt(')') {
+
+		for p.peek().TokenKind != ScopeClose {
 			// expression consists of atoms which can be other expressions, strings or basic atoms
 			node := p.atom_node()
 			if node != nil {
@@ -82,7 +75,7 @@ func (p *Parser) expression_node() *Node {
 				}
 			}
 		}
-		p.drop()
+		p.eat()
 		if len(types) == 1 {
 			// if the expression consists of operator and operands, if one of the operands has type
 			// we can infer the type of the operand of unknown type
@@ -151,78 +144,36 @@ func (p Parser) setup_argument_references(node *Node, arguments *Node) {
 	}
 }
 
-func (p *Parser) string_node() *Node {
-	if p.is('"') {
-		begin := p.Position
-		// include open quote
-		p.drop()
-		for p.isnt('"') {
-			p.drop()
-		}
-		// include closing quote
-		p.drop()
-		return node(Atom, []byte(p.Input[begin:p.Position]), String, []*Node{})
-	}
-	return nil
-}
-
-func (p *Parser) int_node() *Node {
-	i, err := strconv.Atoi(p.peek_token())
-	if err == nil {
-		p.drop_token()
-		return node(Atom, *int32_to_bytes(i), Int, []*Node{})
-	}
-	return nil
-}
-
-func (p *Parser) bool_node() *Node {
-	if p.peek_token() == "t" || p.peek_token() == "T" {
-		p.drop_token()
-		return node(Atom, []byte{1}, Boolean, []*Node{})
-	}
-	if p.peek_token() == "nil" {
-		p.drop_token()
-		return node(Atom, []byte{0}, Boolean, []*Node{})
+func (p *Parser) literal_node() *Node {
+	if p.peek().TokenKind == Literal {
+		return node(Atom, p.peek().Value, p.eat().Type, []*Node{})
 	}
 	return nil
 }
 
 func (p *Parser) decl_node() *Node {
-	if p.peek_token() == "defun" {
-		return node(DeclarationAtom, []byte(p.drop_token()), Unknown, []*Node{})
+	if p.peek().TokenKind == Keyword && p.eq(p.peek().Value, "defun") {
+		return node(DeclarationAtom, p.eat().Value, Unknown, []*Node{})
 	}
 	return nil
 }
 
 func (p *Parser) binary_operator_node() *Node {
-	if p.peek_token() == "+" || p.peek_token() == "-" || p.peek_token() == "*" || p.peek_token() == "/" {
-		return node(BinaryOperator, p.drop_token(), Unknown, []*Node{})
+	if p.peek().TokenKind == Operator {
+		return node(BinaryOperator, p.eat().Value, Unknown, []*Node{})
 	}
 	return nil
 }
 
-func (p *Parser) peek_token() string {
-	begin := p.Position
-	// get all while it is not a separator or an end of current expression or a begin of a new one
-	for p.isnt(' ') && p.isnt(')') && p.isnt('(') {
-		p.drop()
+func (p *Parser) peek() *Token {
+	if !p.in() {
+		return &Token{}
 	}
-	end := p.Position
-	p.Position = begin
-	return p.Input[begin:end]
+	return p.Input[p.Position]
 }
 
 func (p *Parser) undefined_node() *Node {
-	return node(Atom, []byte(p.drop_token()), Unknown, []*Node{})
-}
-
-func (p *Parser) drop_token() []byte {
-	begin := p.Position
-	// get all while it is not a separator or an end of current expression or a begin of a new one
-	for p.isnt(' ') && p.isnt(')') && p.isnt('(') {
-		p.drop()
-	}
-	return []byte(p.Input[begin:p.Position])
+	return node(Atom, p.eat().Value, Unknown, []*Node{})
 }
 
 func (p Parser) record_error(err error) {
@@ -233,21 +184,19 @@ func (p *Parser) in() bool {
 	return p.Position < len(p.Input)
 }
 
-func (p *Parser) is(char byte) bool {
-	return p.in() && p.Input[p.Position] == char
-}
-
-func (p *Parser) isnt(char byte) bool {
-	return p.in() && !p.is(char)
-}
-
-func (p *Parser) drop() {
+func (p *Parser) eat() *Token {
 	p.Position += 1
+	return p.Input[p.Position-1]
 }
 
-func (p *Parser) trim() {
-	// atoms are split by spaces
-	for p.is(' ') {
-		p.drop()
+func (p *Parser) eq(bytes []byte, str string) bool {
+	if len(bytes) != len(str) {
+		return false
 	}
+	for i, ch := range bytes {
+		if str[i] != ch {
+			return false
+		}
+	}
+	return true
 }

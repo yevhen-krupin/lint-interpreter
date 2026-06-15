@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"iter"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -11,13 +12,12 @@ import (
 type TokenKind string
 
 const (
-	Identifier  TokenKind = "Identifier"
-	Operator    TokenKind = "Operator"
-	ScopeOpen   TokenKind = "ScopeOpen"
-	ScopeClose  TokenKind = "ScopeClose"
-	Literal     TokenKind = "Literal"
-	Keyword     TokenKind = "Keyword"
-	Declaration TokenKind = "Declaration"
+	Identifier TokenKind = "Identifier"
+	Operator   TokenKind = "Operator"
+	ScopeOpen  TokenKind = "ScopeOpen"
+	ScopeClose TokenKind = "ScopeClose"
+	Literal    TokenKind = "Literal"
+	Keyword    TokenKind = "Keyword"
 )
 
 type TokenStream []*Token
@@ -59,6 +59,7 @@ func tokenize(input string) iter.Seq[*Token] {
 
 func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 	return func(yield func(*Token) bool) {
+		last_pos := tokenizer.Position
 		for tokenizer.in() {
 			tokenizer.trim()
 			fmt.Printf("\ninput left: %v", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)])
@@ -68,11 +69,16 @@ func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 				(*Tokenizer).operator,
 				(*Tokenizer).declaration,
 				(*Tokenizer).literal,
+				(*Tokenizer).condition,
 				(*Tokenizer).identifier,
 			)
 			if t != nil {
 				if !yield(t) {
 					return
+				}
+			} else {
+				if tokenizer.Position == last_pos {
+					panic(fmt.Sprintf("\ntokenizer is stuck, unknown token %v", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)]))
 				}
 			}
 		}
@@ -90,8 +96,15 @@ func (p *Tokenizer) scope() *Token {
 }
 
 func (p *Tokenizer) operator() *Token {
-	if p.is('+') || p.is('-') || p.is('*') || p.is('/') {
+	if p.is('+') || p.is('-') || p.is('*') || p.is('/') || p.is('<') || p.is('>') || p.is('=') {
 		return &Token{Operator, p.drop(1), Unknown}
+	}
+	return nil
+}
+
+func (p *Tokenizer) condition() *Token {
+	if p.are("if ") || p.are("if(") {
+		return &Token{Keyword, p.drop(2), Unknown}
 	}
 	return nil
 }
@@ -99,27 +112,36 @@ func (p *Tokenizer) operator() *Token {
 func (p *Tokenizer) declaration() *Token {
 	// when check include whitespace
 	if p.are("defun ") {
-		return &Token{Declaration, p.drop(len("defun")), Unknown}
+		return &Token{Keyword, p.drop(len("defun")), Unknown}
 	}
 	return nil
 }
 
 func (p *Tokenizer) literal() *Token {
 	if p.is('"') {
+		p.drop(1)
 		length := p.whilent([]byte{'"'})
-		return &Token{Literal, p.drop(length + 1), String}
+		return &Token{Literal, slices.Concat([]byte{'"'}, p.drop(length+1)), String}
 	}
 	if p.are("t ") || p.are("T ") {
-		return &Token{Literal, p.drop(1), Boolean}
+		p.drop(1)
+		return &Token{Literal, []byte{1}, Boolean}
 	}
 	if p.are("nil ") {
-		return &Token{Literal, p.drop(len("nil")), Boolean}
+		p.drop(3)
+		return &Token{Literal, []byte{0}, Boolean}
 	}
 	// are numbers = literal
 	digits := p.while(unicode.IsDigit)
 	if digits > 0 {
+		// convert bytes -> string -> number
+		s := string(p.drop(digits))
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			fmt.Printf("\nError: unable to convert %v to int %v", s, err)
+		}
 		// fmt.Printf("\n[token] %d %v", digits, string(p.Input[p.Position:p.Position+digits]))
-		return &Token{Literal, p.drop(digits), Int}
+		return &Token{Literal, int32_to_bytes(i), Int}
 	}
 	return nil
 }

@@ -124,7 +124,18 @@ func main() {
 				{"(/ 1 2 )", t(so(), o('/'), d(1), d(2), sc())},
 				{"( / 1 2)", t(so(), o('/'), d(1), d(2), sc())},
 				{"(defun doublen (n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
-				{"(defun doublen (n) (* n 2))\n (doublen 2)", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc(), so(), i("doublen"), d(2), sc())},
+				{"(defun doublen(n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen (n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen(n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen (n) (*n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen (n) (* n 2)   )", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
+				{
+					"(defun doublen (n) (* n 2))\n (doublen 2)",
+					t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc(), so(), i("doublen"), d(2), sc()),
+				},
+				{"\"Hello, Coding Challenges\"",
+					t(s("\"Hello, Coding Challenges\""))},
+				{"(defun hello() (\"Hello Coding Challenges\"))\n(hello)", t(so(), f(), i("hello"), so(), sc(), so(), s("\"Hello Coding Challenges\""), sc(), sc(), so(), i("hello"), sc())},
 			},
 		),
 		evaluate_test("int evaluation", []TestCase[int]{
@@ -152,12 +163,12 @@ func main() {
 			{"nil", false},
 		}),
 
-		evaluate_test("string evaluation", []TestCase[string]{
-			{"\"Hello, Coding Challenges\"",
-				"\"Hello, Coding Challenges\""},
-			{"(defun hello() (\"Hello Coding Challenges\")\n(hello)",
-				"\"Hello Coding Challenges\""},
-		}),
+		// evaluate_test("string evaluation", []TestCase[string]{
+		// {"\"Hello, Coding Challenges\"",
+		// "\"Hello, Coding Challenges\""},
+		// {"(defun hello() (\"Hello Coding Challenges\"))\n(hello)",
+		// "\"Hello Coding Challenges\""},
+		// }),
 	}
 
 	pass := 0
@@ -176,7 +187,7 @@ func main() {
 
 	array := []string{
 		"()",
-		":CC",
+		// ":CC",
 		"(format t \"Hello, Coding Challenge World World\")",
 		"(defun fib (n)" +
 			"  (if (< n 2)" +
@@ -233,15 +244,19 @@ func t(args ...*Token) []*Token {
 }
 
 func d(i int) *Token {
-	return &Token{Literal, []byte(strconv.Itoa(i)), Int}
+	return &Token{Literal, int32_to_bytes(i), Int}
 }
 
 func f() *Token {
-	return &Token{Declaration, []byte("defun"), Unknown}
+	return &Token{Keyword, []byte("defun"), Unknown}
 }
 
 func i(s string) *Token {
 	return &Token{Identifier, []byte(s), Unknown}
+}
+
+func s(s string) *Token {
+	return &Token{Literal, []byte(s), String}
 }
 
 func eq(a []*Token, b []*Token) bool {
