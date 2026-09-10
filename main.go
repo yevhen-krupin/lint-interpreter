@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ type Argument struct {
 }
 
 type StackFrame struct {
+	id        string
 	Function  string
 	Arguments []Argument
 }
@@ -57,7 +59,7 @@ func tokenizer_test(array []TestCase[[]*Token]) TestResult {
 			fail += 1
 		} else {
 			pass += 1
-			fmt.Printf("\n%vPASS%v", Green, Reset)
+			fmt.Printf("\n%vPASS%v : %v", Green, Reset, element.input)
 		}
 		fmt.Printf("\n---------------")
 	}
@@ -69,42 +71,56 @@ func tokenizer_test(array []TestCase[[]*Token]) TestResult {
 func evaluate_test[T int | bool | string](name string, array []TestCase[T]) TestResult {
 	pass := 0
 	fail := 0
+
 	for index, element := range array {
-		results := []EvaluationResult{}
-		nodes := []*Node{}
-		subs := strings.SplitSeq(element.input, "\n")
-		runtime := NewRuntime()
-		for sub_element := range subs {
-			ast, _ := ParseAst(sub_element)
-			nodes = append(nodes, ast.Root)
-			r := runtime.EvaluateAst(ast)
-			results = append(results, r)
-			if r.Error != nil {
-				fmt.Printf("\nFailed to evaluate due to %v", r.Error.Error())
-			}
-		}
-		final := results[len(results)-1]
-
-		if final.Value != element.output {
-
-			fmt.Printf("\nInput: %d: `%v`", index, element.input)
-			fmt.Printf("\n%vFAIL%v", Red, Reset)
-			fmt.Printf("\nFunctions declared: %v", runtime.Functions)
-			for i, r := range results {
-				fmt.Printf("\nEvaluated as %v: %v", r.Type, r.Value)
-				print(nodes[i], "")
-			}
-			fail += 1
-
-		} else {
+		if evaluate_test_case(name, index, element) {
 			pass += 1
-			fmt.Printf("\n%vPASS%v", Green, Reset)
+		} else {
+			fail += 1
 		}
-		fmt.Printf("\n---------------")
 	}
 
 	fmt.Printf("\n[%v] result: %v Pass %d | %v Fail %d | %v Total %d", name, Green, pass, Red, fail, Reset, pass+fail)
 	return TestResult{pass, fail}
+}
+
+func evaluate_test_case[T int | bool | string](name string, index int, element TestCase[T]) bool {
+
+	log.Println("entered the test", name)
+	results := []EvaluationResult{}
+	nodes := []*Node{}
+	subs := strings.SplitSeq(element.input, "\n")
+	runtime := NewRuntime()
+	for sub_element := range subs {
+		ast, _ := ParseAst(sub_element)
+		nodes = append(nodes, ast.Root)
+		r := runtime.EvaluateAst(ast)
+		results = append(results, r)
+		if r.Error != nil {
+			fmt.Printf("\nFailed to evaluate due to %v", r.Error.Error())
+		}
+	}
+	final := results[len(results)-1]
+
+	defer fmt.Printf("\n---------------")
+	if final.Value != element.output {
+
+		fmt.Printf("\nInput: %d: `%v`", index, element.input)
+		fmt.Printf("\n%vFAIL%v : %v", Red, Reset, element.input)
+		fmt.Printf("\nFunctions declared: %v", runtime.Functions)
+		for i, r := range results {
+			if i == len(results)-1 {
+				fmt.Printf("\nEvaluated as %v: %v but has to be %T: %v", r.Type, r.Value, element.output, element.output)
+			} else {
+				fmt.Printf("\nEvaluated as %v: %v", r.Type, r.Value)
+			}
+			print(nodes[i], "")
+		}
+		return false
+	} else {
+		fmt.Printf("\n%vPASS%v : %v", Green, Reset, element.input)
+		return true
+	}
 }
 
 func main() {
@@ -116,22 +132,22 @@ func main() {
 				{"255", t(d(255))},
 				{"256", t(d(256))},
 				{"16777217", t(d(16777217))},
-				{"(+ 1 2)", t(so(), o('+'), d(1), d(2), sc())},
-				{"(- 1 2)", t(so(), o('-'), d(1), d(2), sc())},
-				{"(* 1 2)", t(so(), o('*'), d(1), d(2), sc())},
-				{"(/ 1 2)", t(so(), o('/'), d(1), d(2), sc())},
-				{"(/1 2)", t(so(), o('/'), d(1), d(2), sc())},
-				{"(/ 1 2 )", t(so(), o('/'), d(1), d(2), sc())},
-				{"( / 1 2)", t(so(), o('/'), d(1), d(2), sc())},
-				{"(defun doublen (n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
-				{"(defun doublen(n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
-				{"(defun doublen (n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
-				{"(defun doublen(n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
-				{"(defun doublen (n) (*n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
-				{"(defun doublen (n) (* n 2)   )", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc())},
+				{"(+ 1 2)", t(so(), oi('+'), d(1), d(2), sc())},
+				{"(- 1 2)", t(so(), oi('-'), d(1), d(2), sc())},
+				{"(* 1 2)", t(so(), oi('*'), d(1), d(2), sc())},
+				{"(/ 1 2)", t(so(), oi('/'), d(1), d(2), sc())},
+				{"(/1 2)", t(so(), oi('/'), d(1), d(2), sc())},
+				{"(/ 1 2 )", t(so(), oi('/'), d(1), d(2), sc())},
+				{"( / 1 2)", t(so(), oi('/'), d(1), d(2), sc())},
+				{"(defun doublen (n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen(n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen (n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen(n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen (n) (*n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
+				{"(defun doublen (n) (* n 2)   )", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
 				{
 					"(defun doublen (n) (* n 2))\n (doublen 2)",
-					t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o('*'), i("n"), d(2), sc(), sc(), so(), i("doublen"), d(2), sc()),
+					t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc(), so(), i("doublen"), d(2), sc()),
 				},
 				{"\"Hello, Coding Challenges\"",
 					t(s("\"Hello, Coding Challenges\""))},
@@ -155,20 +171,78 @@ func main() {
 			{"(- 1 1)", 0},
 			{"(- 1 2)", -1},
 			{"(defun doublen (n) (* n 2))\n (doublen 2)", 4},
+			// bool to int
+			{"(if (= 2 2) 1 2)", 1},
+			{"(defun twoorthree (n) (if (= n 2) 2 3))\n (twoorthree 2)", 2},
+			{"(defun twoorthree (n) (if (= n 2) 2 3))\n (twoorthree 1)", 3},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 0)", 0},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 1)", 1},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 2)", 1},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 3)", 2},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 4)", 3},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 5)", 5},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 6)", 8},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 7)", 13},
+			{"(defun fib (n)" +
+				"  (if (< n 2)" +
+				"      n" +
+				"      (+ (fib (- n 1)) (fib (- n 2)))))" +
+				"\n (fib 8)", 21},
 		}),
 
 		evaluate_test("bool evaluation", []TestCase[bool]{
 			{"t", true},
 			{"T", true},
 			{"nil", false},
+			{"(< 1 2)", true},
+			{"(< 2 2)", false},
+			{"(< 3 2)", false},
+			{"(> 1 2)", false},
+			{"(> 2 2)", false},
+			{"(> 3 2)", true},
+			{"(= 1 2)", false},
+			{"(= 2 2)", true},
+			{"(= 3 2)", false},
 		}),
 
-		// evaluate_test("string evaluation", []TestCase[string]{
-		// {"\"Hello, Coding Challenges\"",
-		// "\"Hello, Coding Challenges\""},
-		// {"(defun hello() (\"Hello Coding Challenges\"))\n(hello)",
-		// "\"Hello Coding Challenges\""},
-		// }),
+		evaluate_test("string evaluation", []TestCase[string]{
+			{"\"Hello, Coding Challenges\"",
+				"\"Hello, Coding Challenges\""},
+			{"(defun hello() (\"Hello Coding Challenges\"))\n(hello)",
+				"\"Hello Coding Challenges\""},
+		}),
 	}
 
 	pass := 0
@@ -189,11 +263,6 @@ func main() {
 		"()",
 		// ":CC",
 		"(format t \"Hello, Coding Challenge World World\")",
-		"(defun fib (n)" +
-			"  (if (< n 2)" +
-			"      n" +
-			"      (+ (fib (- n 1))" +
-			"      (fib (- n 2)))))",
 	}
 
 	for index, element := range array {
@@ -214,16 +283,17 @@ func main() {
 }
 
 func print(node *Node, indent string) {
-	value := ""
-	if node.Kind == Atom && node.Type == Int {
-		value = strconv.Itoa(bytes_to_int32(node.Value))
-	}
-	if node.Type == String || node.Type == Unknown || node.Kind == ArgumentDeclaration || node.Kind == ArgumentVariable {
-		value = string(node.Value)
-	}
-	fmt.Printf("\n%v- %v: %v: %v [%v]", indent, node.Kind, node.Type, node.Value, value)
+	fmt.Printf("\n%v- %v: %v: %v [%v]", indent, node.Kind, node.Type, node.Value, value_to_string(node))
 	for _, n := range node.Nodes {
 		print(n, indent+"  ")
+	}
+}
+
+func value_to_string(node *Node) string {
+	if node.Kind == Atom && node.Type == Int {
+		return strconv.Itoa(bytes_to_int32(node.Value))
+	} else {
+		return string(node.Value)
 	}
 }
 
@@ -235,8 +305,8 @@ func sc() *Token {
 	return &Token{ScopeClose, []byte{')'}, Unknown}
 }
 
-func o(ch byte) *Token {
-	return &Token{Operator, []byte{ch}, Unknown}
+func oi(ch byte) *Token {
+	return &Token{Operator, []byte{ch}, Int}
 }
 
 func t(args ...*Token) []*Token {

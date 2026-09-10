@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 type Runtime struct {
@@ -36,6 +38,32 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 	if node.Kind == Atom && node.Type == Boolean {
 		return EvaluationResult{Boolean, node.Value[0] == 1, nil}
 	}
+	// condition
+	if node.Kind == ConditionAtom {
+		if len(node.Nodes) != 3 {
+			return EvaluationResult{Unknown, nil, fmt.Errorf("condition atom should have 3 children nodes: condition body and two branches for true and false")}
+		}
+		if node.Type != Boolean {
+			return EvaluationResult{Unknown, nil, fmt.Errorf("condition atom have boolean type")}
+		}
+		result := r.evaluate(node.Nodes[0])
+		fmt.Println("evaluate condition", value_to_string(node.Nodes[0].Nodes[0]), value_to_string(node.Nodes[0].Nodes[1]), value_to_string(node.Nodes[0].Nodes[2]), result.Type, result.Value)
+		if result.Error != nil {
+			return result
+		}
+		if result.Type != Boolean {
+			return EvaluationResult{Unknown, nil, fmt.Errorf("condition evaluation should to return boolean but was %v : %v", result.Type, result.Value)}
+		}
+		if result.Value == true {
+			fmt.Println("condition -> true branch")
+			print(node.Nodes[1], "")
+			return r.evaluate(node.Nodes[1])
+		} else {
+			fmt.Println("condition -> false branch", node.Nodes[2])
+			print(node.Nodes[2], "")
+			return r.evaluate(node.Nodes[2])
+		}
+	}
 
 	// resolve argument variable
 	if node.Kind == ArgumentVariable && len(node.Nodes) == 0 && node.ArgumentIndex >= 0 && len(*r.Stack) > 0 && node.ArgumentIndex < len(r.last_frame().Arguments) {
@@ -55,27 +83,44 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 	// operators
 	if node.Kind == Expression && len(node.Nodes) > 2 {
 		oper, err := r.get_operator_bytes(node)
+
 		if err != nil {
 			return EvaluationResult{Error, nil, err}
 		}
 		if oper[0] == '+' {
-			return r.binary_operator_int(node, func(a, b int) int {
-				return a + b
+			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+				return EvaluationResult{Int, a.Value.(int) + b.Value.(int), nil}
 			})
 		}
 		if oper[0] == '-' {
-			return r.binary_operator_int(node, func(a, b int) int {
-				return a - b
+			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+				return EvaluationResult{Int, a.Value.(int) - b.Value.(int), nil}
 			})
 		}
 		if oper[0] == '*' {
-			return r.binary_operator_int(node, func(a, b int) int {
-				return a * b
+			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+				return EvaluationResult{Int, a.Value.(int) * b.Value.(int), nil}
 			})
 		}
 		if oper[0] == '/' {
-			return r.binary_operator_int(node, func(a, b int) int {
-				return a / b
+			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+				return EvaluationResult{Int, a.Value.(int) / b.Value.(int), nil}
+			})
+		}
+		if oper[0] == '=' {
+			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+				return EvaluationResult{Boolean, a.Value.(int) == b.Value.(int), nil}
+			})
+		}
+		if oper[0] == '<' {
+			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+				//fmt.Println("evaluate <", a.Value.(int), b.Value.(int), a.Value.(int) < b.Value.(int))
+				return EvaluationResult{Boolean, a.Value.(int) < b.Value.(int), nil}
+			})
+		}
+		if oper[0] == '>' {
+			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+				return EvaluationResult{Boolean, a.Value.(int) > b.Value.(int), nil}
 			})
 		}
 	}
@@ -94,21 +139,17 @@ func (r Runtime) get_operator_bytes(node *Node) ([]byte, error) {
 	return node.Nodes[0].Value, nil
 }
 
-func (r Runtime) binary_operator_int(node *Node, f func(int, int) int) EvaluationResult {
-	a, e1 := r.operand_int(node, 1)
-	b, e2 := r.operand_int(node, 2)
-	if e1 != nil || e2 != nil {
-		return EvaluationResult{Error, nil, first_error(e1, e2)}
+func (r Runtime) binary_operator(node *Node, f func(EvaluationResult, EvaluationResult) EvaluationResult) EvaluationResult {
+	a := r.operand(node, 1)
+	b := r.operand(node, 2)
+	if a.Error != nil || b.Error != nil {
+		return EvaluationResult{Error, nil, first_error(a.Error, b.Error)}
 	}
-	return EvaluationResult{Int, f(a, b), nil}
+	return f(a, b)
 }
 
-func (r Runtime) operand_int(node *Node, index int) (int, error) {
-	res := r.evaluate(node.Nodes[index])
-	if res.Type == Int {
-		return res.Value.(int), res.Error
-	}
-	return 0, fmt.Errorf("Unable to evaluate operand from the node %v, value: %v", node, string(node.Value))
+func (r Runtime) operand(node *Node, index int) EvaluationResult {
+	return r.evaluate(node.Nodes[index])
 }
 
 func first_error(input ...error) error {
@@ -144,7 +185,15 @@ func (r Runtime) call_function(node *Node, function FunctionEntry) EvaluationRes
 		}
 	}
 
-	//fmt.Printf("calling function %v args %v body %v", name, args, function.Body)
-	*r.Stack = append(*r.Stack, StackFrame{name, args})
-	return r.evaluate(function.Body)
+	fmt.Println("calling function", name, "args", args, "body", function.Body)
+	frame := StackFrame{uuid.New().String(), name, args}
+	*r.Stack = append(*r.Stack, frame)
+	res := r.evaluate(function.Body)
+	top := (*r.Stack)[len(*r.Stack)-1]
+	if top.id != frame.id {
+		panic("unexpected state: the stack frame after leaving the function is not correct")
+	}
+	*r.Stack = (*r.Stack)[:len(*r.Stack)-1]
+	fmt.Println("function", name, "args", args, "result", res.Type, ":", res.Value)
+	return res
 }
