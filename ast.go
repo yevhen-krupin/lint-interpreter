@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"slices"
 )
 
@@ -35,6 +36,9 @@ func (p *Parser) atom_node() *Node {
 		// extract declaration
 		(*Parser).decl_node,
 
+		// extract condition
+		(*Parser).condition_node,
+
 		// extract binary operators
 		(*Parser).binary_operator_node,
 		//fallback
@@ -46,17 +50,14 @@ func (p *Parser) expression_node() *Node {
 	if p.peek().TokenKind == ScopeOpen {
 		p.eat()
 		nodes := []*Node{}
-		types := []ResultType{}
 
 		for p.peek().TokenKind != ScopeClose {
 			// expression consists of atoms which can be other expressions, strings or basic atoms
 			node := p.atom_node()
 			if node != nil {
 				nodes = append(nodes, node)
-				if node.Type != Unknown {
-					types = append(types, node.Type)
-				}
 				// function declaration case
+				// to move in the declaration node constructor
 				if node.Kind == DeclarationAtom {
 					// declaration := node
 					// extract name
@@ -76,19 +77,24 @@ func (p *Parser) expression_node() *Node {
 			}
 		}
 		p.eat()
-		if len(types) == 1 {
-			// if the expression consists of operator and operands, if one of the operands has type
-			// we can infer the type of the operand of unknown type
-			if slices.Index([]byte("+-*/"), nodes[0].Value[0]) > -1 {
-				// might want to setup nodes[0].Type = types[0]
+		if len(nodes) > 0 {
+			if nodes[0].Kind == BinaryOperator {
+				// if the expression consists of operator and operands
+				// we can infer the type of the operands and the expression
+				t := first_known_type_or_unknown(nodes[1], nodes[2])
 				for i := 1; i < len(nodes); i++ {
 					if nodes[i].Type == Unknown {
-						nodes[i].Type = types[0]
+						nodes[i].Type = t
 					}
 				}
+				return node(Expression, []byte{}, nodes[0].Type, nodes)
 			}
-			return node(Expression, []byte{}, types[0], nodes)
+			if nodes[0].Kind == ConditionAtom {
+				// condition itself is boolean but the conditional expression result type is based on the possible results types
+				return node(Expression, []byte{}, first_known_type_or_unknown(nodes[0].Nodes[1], nodes[0].Nodes[2]), nodes)
+			}
 		}
+
 		return node(Expression, []byte{}, Unknown, nodes)
 	}
 	return nil
@@ -98,7 +104,7 @@ func (p *Parser) extract_function() (*Node, *Node) {
 	// extract arguments
 	arguments := p.expression_node()
 
-	// fmt.Printf("\nextracted arguments: %v", arguments)
+	log.Printf("\nextracted arguments: %v", arguments)
 	if arguments != nil {
 		arguments.Kind = ArgumentsExpression
 		args := []string{}
@@ -127,15 +133,17 @@ func (p Parser) setup_argument_references(node *Node, arguments *Node) {
 			// the argument name corresponds the atom
 			if slices.Equal(a.Value, n.Value) {
 				n.Kind = ArgumentVariable
-				// fmt.Printf("\nargument reference setup for %v to %v", a, n)
+				fmt.Printf("\nargument reference setup for %v to %v", a, n)
 				n.ArgumentIndex = i
-				if a.Type == Unknown {
+				if a.Type == Unknown && n.Type != Unknown {
 					a.Type = n.Type
 				} else {
 					if a.Type != n.Type {
 						p.record_error(fmt.Errorf("Inconsistent typing of argument %v", string(a.Value)))
 					}
 				}
+				// going recursive: the arguments can be found in the enclosed expressions
+				p.setup_argument_references(n, arguments)
 			}
 		}
 		if len(n.Nodes) > 0 {
@@ -157,10 +165,17 @@ func (p *Parser) decl_node() *Node {
 	}
 	return nil
 }
+func (p *Parser) condition_node() *Node {
+	if p.peek().TokenKind == Keyword && p.eq(p.peek().Value, "if") {
+		return node(ConditionAtom, p.eat().Value, Boolean, []*Node{p.atom_node(), p.atom_node(), p.atom_node()})
+	}
+	return nil
+}
 
 func (p *Parser) binary_operator_node() *Node {
 	if p.peek().TokenKind == Operator {
-		return node(BinaryOperator, p.eat().Value, Unknown, []*Node{})
+		t := p.eat()
+		return node(BinaryOperator, t.Value, t.Type, []*Node{})
 	}
 	return nil
 }
@@ -199,4 +214,13 @@ func (p *Parser) eq(bytes []byte, str string) bool {
 		}
 	}
 	return true
+}
+
+func first_known_type_or_unknown(input ...*Node) ResultType {
+	for _, item := range input {
+		if item != nil && item.Type != Unknown {
+			return item.Type
+		}
+	}
+	return Unknown
 }

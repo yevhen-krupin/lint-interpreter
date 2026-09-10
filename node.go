@@ -1,8 +1,8 @@
 package main
 
-import (
+import "fmt"
+
 // "fmt"
-)
 
 type ResultType string
 
@@ -21,6 +21,7 @@ const (
 	Expression          Kind = "Expression"
 	Atom                Kind = "Atom"
 	DeclarationAtom     Kind = "DeclarationAtom"
+	ConditionAtom       Kind = "ConditionAtom"
 	SymbolAtom          Kind = "SymbolAtom"
 	ArgumentsExpression Kind = "ArgumentsExpression"
 	BinaryOperator      Kind = "BinaryOperator"
@@ -43,6 +44,6 @@ func node(kind Kind, value []byte, rt ResultType, nodes []*Node) *Node {
 	node.Value = value
 	node.Nodes = nodes
 
-	//fmt.Printf("\nnode %p: kind %v | type %v | value %v | nodes %v", &node, kind, rt, string(value), nodes)
+	fmt.Printf("\nnode %p: kind %v | type %v | value %v | nodes %v", &node, kind, rt, string(value), nodes)
 	return &node
 }

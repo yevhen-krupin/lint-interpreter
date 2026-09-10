@@ -62,14 +62,14 @@ func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 		last_pos := tokenizer.Position
 		for tokenizer.in() {
 			tokenizer.trim()
-			fmt.Printf("\ninput left: %v", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)])
+			//fmt.Printf("\ninput left: %v", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)])
 			t := coalesce(
 				tokenizer,
 				(*Tokenizer).scope,
 				(*Tokenizer).operator,
 				(*Tokenizer).declaration,
-				(*Tokenizer).literal,
 				(*Tokenizer).condition,
+				(*Tokenizer).literal,
 				(*Tokenizer).identifier,
 			)
 			if t != nil {
@@ -96,8 +96,11 @@ func (p *Tokenizer) scope() *Token {
 }
 
 func (p *Tokenizer) operator() *Token {
-	if p.is('+') || p.is('-') || p.is('*') || p.is('/') || p.is('<') || p.is('>') || p.is('=') {
-		return &Token{Operator, p.drop(1), Unknown}
+	if p.is('+') || p.is('-') || p.is('*') || p.is('/') {
+		return &Token{Operator, p.drop(1), Int}
+	}
+	if p.is('<') || p.is('>') || p.is('=') || p.are("<=") || p.are(">=") {
+		return &Token{Operator, p.drop(1), Boolean}
 	}
 	return nil
 }
