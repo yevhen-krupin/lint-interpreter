@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"iter"
+	"log"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,8 +46,6 @@ type Token struct {
 	Type      ResultType
 }
 
-var operators = []byte("+-/*")
-
 type Tokenizer struct {
 	Input    string
 	Position int
@@ -62,7 +61,7 @@ func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 		last_pos := tokenizer.Position
 		for tokenizer.in() {
 			tokenizer.trim()
-			//fmt.Printf("\ninput left: %v", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)])
+			log.Println("input left:", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)])
 			t := coalesce(
 				tokenizer,
 				(*Tokenizer).scope,
@@ -78,7 +77,7 @@ func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 				}
 			} else {
 				if tokenizer.Position == last_pos {
-					panic(fmt.Sprintf("\ntokenizer is stuck, unknown token %v", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)]))
+					panic(fmt.Sprintln("tokenizer is stuck, unknown token", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)]))
 				}
 			}
 		}
@@ -141,9 +140,8 @@ func (p *Tokenizer) literal() *Token {
 		s := string(p.drop(digits))
 		i, err := strconv.Atoi(s)
 		if err != nil {
-			fmt.Printf("\nError: unable to convert %v to int %v", s, err)
+			log.Println("Error: unable to convert", s, "to int:", err)
 		}
-		// fmt.Printf("\n[token] %d %v", digits, string(p.Input[p.Position:p.Position+digits]))
 		return &Token{Literal, int32_to_bytes(i), Int}
 	}
 	return nil

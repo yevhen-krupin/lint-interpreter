@@ -104,7 +104,7 @@ func (p *Parser) extract_function() (*Node, *Node) {
 	// extract arguments
 	arguments := p.expression_node()
 
-	log.Printf("\nextracted arguments: %v", arguments)
+	log.Println("extracted arguments:", arguments)
 	if arguments != nil {
 		arguments.Kind = ArgumentsExpression
 		args := []string{}
@@ -115,7 +115,7 @@ func (p *Parser) extract_function() (*Node, *Node) {
 
 		// extract body
 		body := p.expression_node()
-		fmt.Printf("\nextracted body: %v", body)
+		log.Println("extracted body:", body)
 		if body == nil {
 			return nil, nil
 		}
@@ -133,7 +133,7 @@ func (p Parser) setup_argument_references(node *Node, arguments *Node) {
 			// the argument name corresponds the atom
 			if slices.Equal(a.Value, n.Value) {
 				n.Kind = ArgumentVariable
-				fmt.Printf("\nargument reference setup for %v to %v", a, n)
+				log.Println("argument reference setup for", a, n)
 				n.ArgumentIndex = i
 				if a.Type == Unknown && n.Type != Unknown {
 					a.Type = n.Type
@@ -142,10 +142,9 @@ func (p Parser) setup_argument_references(node *Node, arguments *Node) {
 						p.record_error(fmt.Errorf("Inconsistent typing of argument %v", string(a.Value)))
 					}
 				}
-				// going recursive: the arguments can be found in the enclosed expressions
-				p.setup_argument_references(n, arguments)
 			}
 		}
+		// going recursive: the arguments can be found in the enclosed expressions
 		if len(n.Nodes) > 0 {
 			p.setup_argument_references(n, arguments)
 		}

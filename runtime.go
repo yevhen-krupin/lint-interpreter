@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -9,6 +10,31 @@ import (
 type Runtime struct {
 	Stack     *[]StackFrame
 	Functions *[]FunctionEntry
+}
+
+type EvaluationResultValue any
+
+type EvaluationResult struct {
+	Type  ResultType
+	Value EvaluationResultValue
+	Error error
+}
+
+type Argument struct {
+	Value any
+	Type  ResultType
+}
+
+type StackFrame struct {
+	id        string
+	Function  string
+	Arguments []Argument
+}
+
+type FunctionEntry struct {
+	Name      string
+	Body      *Node
+	Arguments *Node
 }
 
 func NewRuntime() Runtime {
@@ -47,7 +73,7 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 			return EvaluationResult{Unknown, nil, fmt.Errorf("condition atom have boolean type")}
 		}
 		result := r.evaluate(node.Nodes[0])
-		fmt.Println("evaluate condition", value_to_string(node.Nodes[0].Nodes[0]), value_to_string(node.Nodes[0].Nodes[1]), value_to_string(node.Nodes[0].Nodes[2]), result.Type, result.Value)
+		log.Println("evaluate condition", value_to_string(node.Nodes[0].Nodes[0]), value_to_string(node.Nodes[0].Nodes[1]), value_to_string(node.Nodes[0].Nodes[2]), result.Type, result.Value)
 		if result.Error != nil {
 			return result
 		}
@@ -55,11 +81,11 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 			return EvaluationResult{Unknown, nil, fmt.Errorf("condition evaluation should to return boolean but was %v : %v", result.Type, result.Value)}
 		}
 		if result.Value == true {
-			fmt.Println("condition -> true branch")
+			log.Println("condition -> true branch")
 			print(node.Nodes[1], "")
 			return r.evaluate(node.Nodes[1])
 		} else {
-			fmt.Println("condition -> false branch", node.Nodes[2])
+			log.Println("condition -> false branch", node.Nodes[2])
 			print(node.Nodes[2], "")
 			return r.evaluate(node.Nodes[2])
 		}
@@ -114,7 +140,7 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 		}
 		if oper[0] == '<' {
 			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
-				//fmt.Println("evaluate <", a.Value.(int), b.Value.(int), a.Value.(int) < b.Value.(int))
+				//log.Println("evaluate <", a.Value.(int), b.Value.(int), a.Value.(int) < b.Value.(int))
 				return EvaluationResult{Boolean, a.Value.(int) < b.Value.(int), nil}
 			})
 		}
@@ -124,7 +150,7 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 			})
 		}
 	}
-	// expression that just return something
+	// expression that just returns something
 	if node.Kind == Expression && len(node.Nodes) == 1 {
 		return r.evaluate(node.Nodes[0])
 	}
@@ -152,15 +178,6 @@ func (r Runtime) operand(node *Node, index int) EvaluationResult {
 	return r.evaluate(node.Nodes[index])
 }
 
-func first_error(input ...error) error {
-	for _, item := range input {
-		if item != nil {
-			return item
-		}
-	}
-	return nil
-}
-
 // node: symbol atom of call site
 // first child is a function, followed by the arguments
 func (r Runtime) call_function(node *Node, function FunctionEntry) EvaluationResult {
@@ -185,7 +202,7 @@ func (r Runtime) call_function(node *Node, function FunctionEntry) EvaluationRes
 		}
 	}
 
-	fmt.Println("calling function", name, "args", args, "body", function.Body)
+	log.Println("calling function", name, "args", args, "body", function.Body)
 	frame := StackFrame{uuid.New().String(), name, args}
 	*r.Stack = append(*r.Stack, frame)
 	res := r.evaluate(function.Body)
@@ -194,6 +211,15 @@ func (r Runtime) call_function(node *Node, function FunctionEntry) EvaluationRes
 		panic("unexpected state: the stack frame after leaving the function is not correct")
 	}
 	*r.Stack = (*r.Stack)[:len(*r.Stack)-1]
-	fmt.Println("function", name, "args", args, "result", res.Type, ":", res.Value)
+	log.Println("function", name, "args", args, "result", res.Type, ":", res.Value)
 	return res
+}
+
+func first_error(input ...error) error {
+	for _, item := range input {
+		if item != nil {
+			return item
+		}
+	}
+	return nil
 }

@@ -1,126 +1,30 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"slices"
 	"strconv"
-	"strings"
 )
-
-type EvaluationResultValue any
-
-type EvaluationResult struct {
-	Type  ResultType
-	Value EvaluationResultValue
-	Error error
-}
-
-type Argument struct {
-	Value any
-	Type  ResultType
-}
-
-type StackFrame struct {
-	id        string
-	Function  string
-	Arguments []Argument
-}
-
-type FunctionEntry struct {
-	Name      string
-	Body      *Node
-	Arguments *Node
-}
-
-type TestCase[T int | bool | string | []*Token] struct {
-	input  string
-	output T
-}
-
-type TestResult struct {
-	pass int
-	fail int
-}
-
-var Red = "\033[31m"
-var Green = "\033[32m"
-var Reset = "\033[0m"
 
 func tokenizer_test(array []TestCase[[]*Token]) TestResult {
 	pass := 0
 	fail := 0
 	for index, element := range array {
+		s := wrap_test(index, "tokenizer_test", element.input)
 		tokens := slices.Collect(tokenize(element.input))
+		s.Close()
 		if !eq(tokens, element.output) {
-			fmt.Printf("\nInput: %d: `%v`", index, element.input)
-			fmt.Printf("\n%vFAIL%v", Red, Reset)
-			fmt.Printf("\nTokenized as %v, expected %v", TokenStream(tokens), TokenStream(element.output))
 			fail += 1
+			failed(element.input)
+			log.Println("Tokenized as ", TokenStream(tokens).String(), "expected", TokenStream(element.output).String())
 		} else {
 			pass += 1
-			fmt.Printf("\n%vPASS%v : %v", Green, Reset, element.input)
+			passed(element.input)
 		}
-		fmt.Printf("\n---------------")
 	}
 
-	fmt.Printf("\n[%v] result: %v Pass %d | %v Fail %d | %v Total %d", "tokenizer", Green, pass, Red, fail, Reset, pass+fail)
+	report("tokenizer", pass, fail)
 	return TestResult{pass, fail}
-}
-
-func evaluate_test[T int | bool | string](name string, array []TestCase[T]) TestResult {
-	pass := 0
-	fail := 0
-
-	for index, element := range array {
-		if evaluate_test_case(name, index, element) {
-			pass += 1
-		} else {
-			fail += 1
-		}
-	}
-
-	fmt.Printf("\n[%v] result: %v Pass %d | %v Fail %d | %v Total %d", name, Green, pass, Red, fail, Reset, pass+fail)
-	return TestResult{pass, fail}
-}
-
-func evaluate_test_case[T int | bool | string](name string, index int, element TestCase[T]) bool {
-
-	log.Println("entered the test", name)
-	results := []EvaluationResult{}
-	nodes := []*Node{}
-	subs := strings.SplitSeq(element.input, "\n")
-	runtime := NewRuntime()
-	for sub_element := range subs {
-		ast, _ := ParseAst(sub_element)
-		nodes = append(nodes, ast.Root)
-		r := runtime.EvaluateAst(ast)
-		results = append(results, r)
-		if r.Error != nil {
-			fmt.Printf("\nFailed to evaluate due to %v", r.Error.Error())
-		}
-	}
-	final := results[len(results)-1]
-
-	defer fmt.Printf("\n---------------")
-	if final.Value != element.output {
-
-		fmt.Printf("\nInput: %d: `%v`", index, element.input)
-		fmt.Printf("\n%vFAIL%v : %v", Red, Reset, element.input)
-		fmt.Printf("\nFunctions declared: %v", runtime.Functions)
-		for i, r := range results {
-			if i == len(results)-1 {
-				fmt.Printf("\nEvaluated as %v: %v but has to be %T: %v", r.Type, r.Value, element.output, element.output)
-			} else {
-				fmt.Printf("\nEvaluated as %v: %v", r.Type, r.Value)
-			}
-			print(nodes[i], "")
-		}
-		return false
-	} else {
-		fmt.Printf("\n%vPASS%v : %v", Green, Reset, element.input)
-		return true
-	}
 }
 
 func main() {
@@ -171,10 +75,13 @@ func main() {
 			{"(- 1 1)", 0},
 			{"(- 1 2)", -1},
 			{"(defun doublen (n) (* n 2))\n (doublen 2)", 4},
-			// bool to int
+		}),
+		evaluate_test("conditional int evaluation", []TestCase[int]{
 			{"(if (= 2 2) 1 2)", 1},
 			{"(defun twoorthree (n) (if (= n 2) 2 3))\n (twoorthree 2)", 2},
 			{"(defun twoorthree (n) (if (= n 2) 2 3))\n (twoorthree 1)", 3},
+		}),
+		evaluate_test("fib evaluation", []TestCase[int]{
 			{"(defun fib (n)" +
 				"  (if (< n 2)" +
 				"      n" +
@@ -253,11 +160,13 @@ func main() {
 		fail += r.fail
 	}
 
-	fmt.Printf("\n[full suite] result: %v Pass %d | %v Fail %d | %v Total %d", Green, pass, Red, fail, Reset, pass+fail)
+	report("full suite", pass, fail)
 
 	if fail > 0 {
 		panic("there were failing tests")
 	}
+
+	/**
 
 	array := []string{
 		"()",
@@ -269,21 +178,20 @@ func main() {
 		runtime := NewRuntime()
 		for sub_element := range strings.SplitSeq(element, "\n") {
 			ast, _ := ParseAst(sub_element)
-			fmt.Printf("\nExpression %d: `%v`", index, sub_element)
+			log.Println("Expression:", index, ": `", sub_element, "`")
 			r := runtime.EvaluateAst(ast)
 			if r.Error != nil {
-				fmt.Printf("\nFailed to evaluate due to %v", r.Error.Error())
+				log.Println("Failed to evaluate due to", r.Error.Error())
 			} else {
-				fmt.Printf("\nEvaluated as %v %v", r.Type, r.Value)
+				log.Println("Evaluated as", r.Type, r.Value)
 				print(ast.Root, "")
 			}
-			fmt.Printf("\n---------------")
 		}
-	}
+	}**/
 }
 
 func print(node *Node, indent string) {
-	fmt.Printf("\n%v- %v: %v: %v [%v]", indent, node.Kind, node.Type, node.Value, value_to_string(node))
+	log.Println(indent, node.Kind, "-", node.Type, ":", node.Value, "[", value_to_string(node), "]")
 	for _, n := range node.Nodes {
 		print(n, indent+"  ")
 	}

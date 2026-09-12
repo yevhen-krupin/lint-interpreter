@@ -1,6 +1,6 @@
 package main
 
-import "fmt"
+import "log"
 
 // "fmt"
 
@@ -44,6 +44,6 @@ func node(kind Kind, value []byte, rt ResultType, nodes []*Node) *Node {
 	node.Value = value
 	node.Nodes = nodes
 
-	fmt.Printf("\nnode %p: kind %v | type %v | value %v | nodes %v", &node, kind, rt, string(value), nodes)
+	log.Println("node", &node, ": kind ", kind, " | type ", rt, "| value ", string(value), " | nodes", nodes)
 	return &node
 }
