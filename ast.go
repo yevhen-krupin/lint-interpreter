@@ -56,24 +56,6 @@ func (p *Parser) expression_node() *Node {
 			node := p.atom_node()
 			if node != nil {
 				nodes = append(nodes, node)
-				// function declaration case
-				// to move in the declaration node constructor
-				if node.Kind == DeclarationAtom {
-					// declaration := node
-					// extract name
-					node = p.atom_node()
-					node.Kind = SymbolAtom
-					nodes = append(nodes, node)
-					arguments, body := p.extract_function()
-					if arguments != nil && body != nil {
-						// name symbol return type (function return type) corresponds body
-						node.Type = body.Type
-						nodes = append(nodes, arguments)
-						nodes = append(nodes, body)
-						*p.Functions = append(*p.Functions, FunctionEntry{Name: string(node.Value), Body: body, Arguments: arguments})
-
-					}
-				}
 			}
 		}
 		p.eat()
@@ -98,33 +80,6 @@ func (p *Parser) expression_node() *Node {
 		return node(Expression, []byte{}, Unknown, nodes)
 	}
 	return nil
-}
-
-func (p *Parser) extract_function() (*Node, *Node) {
-	// extract arguments
-	arguments := p.expression_node()
-
-	log.Println("extracted arguments:", arguments)
-	if arguments != nil {
-		arguments.Kind = ArgumentsExpression
-		args := []string{}
-		for _, arg := range arguments.Nodes {
-			arg.Kind = ArgumentDeclaration
-			args = append(args, string(arg.Value))
-		}
-
-		// extract body
-		body := p.expression_node()
-		log.Println("extracted body:", body)
-		if body == nil {
-			return nil, nil
-		}
-
-		// reference beteween the nodes inside of the body to the arguments
-		p.setup_argument_references(body, arguments)
-		return arguments, body
-	}
-	return nil, nil
 }
 
 func (p Parser) setup_argument_references(node *Node, arguments *Node) {
@@ -160,7 +115,32 @@ func (p *Parser) literal_node() *Node {
 
 func (p *Parser) decl_node() *Node {
 	if p.peek().TokenKind == Keyword && p.eq(p.peek().Value, "defun") {
-		return node(DeclarationAtom, p.eat().Value, Unknown, []*Node{})
+		p.eat()
+		// we omit defun token, there is no value for node for it, we extract the callable symbol
+		// SymbolAtom
+		//  - Expression (arguments)
+		//  - Body (arguments)
+		name := p.eat()
+		// extract arguments
+		arguments := p.expression_node()
+
+		log.Println("extracted arguments:", arguments)
+		if arguments != nil {
+			args := []string{}
+			for _, arg := range arguments.Nodes {
+				args = append(args, string(arg.Value))
+			}
+		}
+
+		// extract body
+		body := p.expression_node()
+		log.Println("extracted body:", body)
+
+		// reference beteween the nodes inside of the body to the arguments
+		p.setup_argument_references(body, arguments)
+
+		*p.Functions = append(*p.Functions, FunctionEntry{Name: string(name.Value), Body: body, Arguments: arguments})
+		return node(SymbolAtom, name.Value, name.Type, []*Node{arguments, body})
 	}
 	return nil
 }

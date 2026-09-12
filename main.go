@@ -198,7 +198,7 @@ func print(node *Node, indent string) {
 }
 
 func value_to_string(node *Node) string {
-	if node.Kind == Atom && node.Type == Int {
+	if node.Kind == Atom && node.Type == Int && len(node.Value) == 4 {
 		return strconv.Itoa(bytes_to_int32(node.Value))
 	} else {
 		return string(node.Value)
