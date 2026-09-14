@@ -27,11 +27,11 @@ func (s TokenStream) String() string {
 	var sb strings.Builder
 	sb.WriteRune('[')
 	for i, e := range s {
+		sb.WriteRune('(')
 		sb.WriteString(string(e.TokenKind))
-		sb.WriteRune(' ')
-		sb.Write(e.Value)
-		sb.WriteRune(' ')
-		sb.WriteString(string(e.Type))
+		sb.WriteString(",'")
+		sb.WriteString(value_to_string(e.Value))
+		sb.WriteString("')")
 		if i < len(s)-1 {
 			sb.WriteRune(',')
 		}
@@ -98,8 +98,11 @@ func (p *Tokenizer) operator() *Token {
 	if p.is('+') || p.is('-') || p.is('*') || p.is('/') {
 		return &Token{Operator, p.drop(1), Int}
 	}
-	if p.is('<') || p.is('>') || p.is('=') || p.are("<=") || p.are(">=") {
+	if p.is('<') || p.is('>') || p.is('=') {
 		return &Token{Operator, p.drop(1), Boolean}
+	}
+	if p.are("<=") || p.are(">=") {
+		return &Token{Operator, p.drop(2), Boolean}
 	}
 	return nil
 }
@@ -211,4 +214,11 @@ func (p *Tokenizer) trim() {
 	for p.is(' ') || p.is('\n') {
 		p.drop(1)
 	}
+}
+
+func value_to_string(data []byte) string {
+	if len(data) == 4 && unicode.IsDigit(rune(data[0])) && unicode.IsDigit(rune(data[1])) && unicode.IsDigit(rune(data[2])) && unicode.IsDigit(rune(data[3])) {
+		return strconv.Itoa(bytes_to_int32(data))
+	}
+	return string(data)
 }

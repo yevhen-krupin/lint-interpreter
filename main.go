@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"slices"
-	"strconv"
 )
 
 func tokenizer_test(array []TestCase[[]*Token]) TestResult {
@@ -191,17 +190,9 @@ func main() {
 }
 
 func print(node *Node, indent string) {
-	log.Println(indent, node.Kind, "-", node.Type, ":", node.Value, "[", value_to_string(node), "]")
+	log.Println(indent, node.Kind, "-", node.Type, ":", node.Value, "[", value_to_string(node.Value), "]")
 	for _, n := range node.Nodes {
 		print(n, indent+"  ")
-	}
-}
-
-func value_to_string(node *Node) string {
-	if node.Kind == Atom && node.Type == Int && len(node.Value) == 4 {
-		return strconv.Itoa(bytes_to_int32(node.Value))
-	} else {
-		return string(node.Value)
 	}
 }
 
