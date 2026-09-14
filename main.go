@@ -15,7 +15,7 @@ func tokenizer_test(array []TestCase[[]*Token]) TestResult {
 		s.Close()
 		if !eq(tokens, element.output) {
 			fail += 1
-			failed(element.input)
+			failed(element.input, s.f.Name())
 			log.Println("Tokenized as ", TokenStream(tokens).String(), "expected", TokenStream(element.output).String())
 		} else {
 			pass += 1

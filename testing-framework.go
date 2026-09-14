@@ -27,11 +27,12 @@ func evaluate_test[T int | bool | string](name string, array []TestCase[T]) Test
 	pass := 0
 	fail := 0
 	for index, element := range array {
-		if evaluate_test_case(name, index, element) {
+		result, file := evaluate_test_case(name, index, element)
+		if result {
 			passed(element.input)
 			pass += 1
 		} else {
-			failed(element.input)
+			failed(element.input, file)
 			fail += 1
 		}
 	}
@@ -47,8 +48,8 @@ func passed(input string) {
 	log.Println(Green, "PASS", Reset, "`", strings.ReplaceAll(strings.ReplaceAll(input, "  ", " "), "\n", " "), "`")
 }
 
-func failed(input string) {
-	log.Println(Red, "FAIL", Reset, "`", input, "`")
+func failed(input string, file string) {
+	log.Println(Red, "FAIL", Reset, "`", input, "`", file)
 }
 
 type Closeable interface {
@@ -64,7 +65,7 @@ func (t TestScope) Close() {
 	log.SetOutput(os.Stdout)
 }
 
-func wrap_test(index int, name string, input string) Closeable {
+func wrap_test(index int, name string, input string) TestScope {
 	if _, err := os.Stat(TEST_DIR); err != nil {
 		if os.IsNotExist(err) {
 			if os.MkdirAll(TEST_DIR, 0777) != nil {
@@ -72,7 +73,11 @@ func wrap_test(index int, name string, input string) Closeable {
 			}
 		}
 	}
-	f, err := os.OpenFile(fmt.Sprintf("%v/%v_%v.txt", TEST_DIR, name, index), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	file := fmt.Sprintf("%v/%v_%v.log", TEST_DIR, strings.ReplaceAll(name, " ", "_"), index)
+	if _, err := os.Stat(file); err == nil {
+		os.Remove(file)
+	}
+	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
 	}
@@ -81,7 +86,7 @@ func wrap_test(index int, name string, input string) Closeable {
 	return TestScope{f}
 }
 
-func evaluate_test_case[T int | bool | string](name string, index int, element TestCase[T]) bool {
+func evaluate_test_case[T int | bool | string](name string, index int, element TestCase[T]) (bool, string) {
 	results := []EvaluationResult{}
 	nodes := []*Node{}
 	subs := strings.SplitSeq(element.input, "\n")
@@ -102,12 +107,12 @@ func evaluate_test_case[T int | bool | string](name string, index int, element T
 	log.Println("Functions declared:", runtime.Functions)
 	for i, r := range results {
 		if i == len(results)-1 {
-			log.Println("Evaluated as", r.Type, r.Value, " but has to be", element.output, element.output)
+			log.Println("Evaluated as", r.Type, r.Value, " but has to be", element.output)
 		} else {
 			log.Println("Evaluated as:", r.Type, r.Value)
 		}
 		print(nodes[i], "")
 	}
 
-	return final.Value == element.output
+	return final.Value == element.output, s.f.Name()
 }
