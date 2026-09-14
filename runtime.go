@@ -69,11 +69,7 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 		if len(node.Nodes) != 3 {
 			return EvaluationResult{Unknown, nil, fmt.Errorf("condition atom should have 3 children nodes: condition body and two branches for true and false")}
 		}
-		if node.Type != Boolean {
-			return EvaluationResult{Unknown, nil, fmt.Errorf("condition atom have boolean type")}
-		}
 		result := r.evaluate(node.Nodes[0])
-		log.Println("evaluate condition", value_to_string(node.Nodes[0].Nodes[0]), value_to_string(node.Nodes[0].Nodes[1]), value_to_string(node.Nodes[0].Nodes[2]), result.Type, result.Value)
 		if result.Error != nil {
 			return result
 		}
@@ -82,11 +78,9 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 		}
 		if result.Value == true {
 			log.Println("condition -> true branch")
-			print(node.Nodes[1], "")
 			return r.evaluate(node.Nodes[1])
 		} else {
 			log.Println("condition -> false branch", node.Nodes[2])
-			print(node.Nodes[2], "")
 			return r.evaluate(node.Nodes[2])
 		}
 	}
@@ -107,45 +101,41 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 	}
 
 	// operators
-	if node.Kind == Expression && len(node.Nodes) > 2 {
-		oper, err := r.get_operator_bytes(node)
-
-		if err != nil {
-			return EvaluationResult{Error, nil, err}
-		}
-		if oper[0] == '+' {
-			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+	if node.Kind == Expression && len(node.Nodes) == 1 && node.Nodes[0].Kind == BinaryOperator {
+		oper := node.Nodes[0]
+		if oper.Value[0] == '+' {
+			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				return EvaluationResult{Int, a.Value.(int) + b.Value.(int), nil}
 			})
 		}
-		if oper[0] == '-' {
-			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+		if oper.Value[0] == '-' {
+			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				return EvaluationResult{Int, a.Value.(int) - b.Value.(int), nil}
 			})
 		}
-		if oper[0] == '*' {
-			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+		if oper.Value[0] == '*' {
+			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				return EvaluationResult{Int, a.Value.(int) * b.Value.(int), nil}
 			})
 		}
-		if oper[0] == '/' {
-			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+		if oper.Value[0] == '/' {
+			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				return EvaluationResult{Int, a.Value.(int) / b.Value.(int), nil}
 			})
 		}
-		if oper[0] == '=' {
-			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+		if oper.Value[0] == '=' {
+			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				return EvaluationResult{Boolean, a.Value.(int) == b.Value.(int), nil}
 			})
 		}
-		if oper[0] == '<' {
-			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+		if oper.Value[0] == '<' {
+			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				//log.Println("evaluate <", a.Value.(int), b.Value.(int), a.Value.(int) < b.Value.(int))
 				return EvaluationResult{Boolean, a.Value.(int) < b.Value.(int), nil}
 			})
 		}
-		if oper[0] == '>' {
-			return r.binary_operator(node, func(a, b EvaluationResult) EvaluationResult {
+		if oper.Value[0] == '>' {
+			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				return EvaluationResult{Boolean, a.Value.(int) > b.Value.(int), nil}
 			})
 		}
@@ -158,16 +148,9 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 	return EvaluationResult{Unknown, nil, nil}
 }
 
-func (r Runtime) get_operator_bytes(node *Node) ([]byte, error) {
-	if len(node.Nodes) < 1 && node.Nodes[0].Kind == BinaryOperator {
-		return []byte{}, fmt.Errorf("unable to get operator atom %v", node.Value)
-	}
-	return node.Nodes[0].Value, nil
-}
-
 func (r Runtime) binary_operator(node *Node, f func(EvaluationResult, EvaluationResult) EvaluationResult) EvaluationResult {
-	a := r.operand(node, 1)
-	b := r.operand(node, 2)
+	a := r.operand(node, 0)
+	b := r.operand(node, 1)
 	if a.Error != nil || b.Error != nil {
 		return EvaluationResult{Error, nil, first_error(a.Error, b.Error)}
 	}

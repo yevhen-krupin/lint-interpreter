@@ -59,25 +59,7 @@ func (p *Parser) expression_node() *Node {
 			}
 		}
 		p.eat()
-		if len(nodes) > 0 {
-			if nodes[0].Kind == BinaryOperator {
-				// if the expression consists of operator and operands
-				// we can infer the type of the operands and the expression
-				t := first_known_type_or_unknown(nodes[1], nodes[2])
-				for i := 1; i < len(nodes); i++ {
-					if nodes[i].Type == Unknown {
-						nodes[i].Type = t
-					}
-				}
-				return node(Expression, []byte{}, nodes[0].Type, nodes)
-			}
-			if nodes[0].Kind == ConditionAtom {
-				// condition itself is boolean but the conditional expression result type is based on the possible results types
-				return node(Expression, []byte{}, first_known_type_or_unknown(nodes[0].Nodes[1], nodes[0].Nodes[2]), nodes)
-			}
-		}
-
-		return node(Expression, []byte{}, Unknown, nodes)
+		return node(Expression, []byte{}, first_known_type_or_unknown(nodes...), nodes)
 	}
 	return nil
 }
@@ -146,15 +128,27 @@ func (p *Parser) decl_node() *Node {
 }
 func (p *Parser) condition_node() *Node {
 	if p.peek().TokenKind == Keyword && p.eq(p.peek().Value, "if") {
-		return node(ConditionAtom, p.eat().Value, Boolean, []*Node{p.atom_node(), p.atom_node(), p.atom_node()})
+		name := p.eat().Value
+		body := p.atom_node()
+		left := p.atom_node()
+		right := p.atom_node()
+		t := first_known_type_or_unknown(left, right)
+		return node(ConditionAtom, name, t, []*Node{body, left, right})
+
 	}
 	return nil
 }
 
 func (p *Parser) binary_operator_node() *Node {
 	if p.peek().TokenKind == Operator {
-		t := p.eat()
-		return node(BinaryOperator, t.Value, t.Type, []*Node{})
+		operator := p.eat()
+		operand1 := p.atom_node()
+		operand2 := p.atom_node()
+		t := first_known_type_or_unknown(operand1, operand2)
+		// TODO: this place looks hacky, need to figure out better way
+		operand1.Type = t
+		operand2.Type = t
+		return node(BinaryOperator, operator.Value, t, []*Node{operand1, operand2})
 	}
 	return nil
 }
