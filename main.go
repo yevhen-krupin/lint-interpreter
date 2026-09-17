@@ -10,7 +10,7 @@ func tokenizer_test(array []TestCase[[]*Token]) TestResult {
 	fail := 0
 	for index, element := range array {
 		s := wrap_test(index, "tokenizer_test", element.input)
-		tokens := slices.Collect(tokenize(element.input))
+		tokens := slices.Collect(tokenize(element.input, Lisp()))
 		s.Close()
 		if !eq(tokens, element.output) {
 			fail += 1
@@ -197,15 +197,15 @@ func print(node *Node, indent string) {
 }
 
 func so() *Token {
-	return &Token{ScopeOpen, []byte{'('}, Unknown}
+	return &Token{Punctuator, []byte{'('}}
 }
 
 func sc() *Token {
-	return &Token{ScopeClose, []byte{')'}, Unknown}
+	return &Token{Punctuator, []byte{')'}}
 }
 
 func oi(ch byte) *Token {
-	return &Token{Operator, []byte{ch}, Int}
+	return &Token{Operator, []byte{ch}}
 }
 
 func t(args ...*Token) []*Token {
@@ -213,19 +213,19 @@ func t(args ...*Token) []*Token {
 }
 
 func d(i int) *Token {
-	return &Token{Literal, int32_to_bytes(i), Int}
+	return &Token{Literal, int32_to_bytes(i)}
 }
 
 func f() *Token {
-	return &Token{Keyword, []byte("defun"), Unknown}
+	return &Token{Keyword, []byte("defun")}
 }
 
 func i(s string) *Token {
-	return &Token{Identifier, []byte(s), Unknown}
+	return &Token{Identifier, []byte(s)}
 }
 
 func s(s string) *Token {
-	return &Token{Literal, []byte(s), String}
+	return &Token{Literal, []byte(s)}
 }
 
 func eq(a []*Token, b []*Token) bool {
@@ -233,7 +233,7 @@ func eq(a []*Token, b []*Token) bool {
 		return false
 	}
 	for i, e := range a {
-		if e.TokenKind != b[i].TokenKind || e.Type != b[i].Type {
+		if e.TokenKind != b[i].TokenKind {
 			return false
 		}
 		for j, ch := range e.Value {

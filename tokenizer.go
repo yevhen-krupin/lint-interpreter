@@ -15,11 +15,44 @@ type TokenKind string
 const (
 	Identifier TokenKind = "Identifier"
 	Operator   TokenKind = "Operator"
-	ScopeOpen  TokenKind = "ScopeOpen"
-	ScopeClose TokenKind = "ScopeClose"
+	Punctuator TokenKind = "Punctuator"
 	Literal    TokenKind = "Literal"
 	Keyword    TokenKind = "Keyword"
 )
+
+type Lexic struct {
+	Keywords    []string
+	Punctuators Punctuators
+	Operators   []string
+	Literals    Literals
+}
+
+type Punctuators struct {
+	All   []string
+	Open  string
+	Close string
+}
+
+type Literals struct {
+	True   []string
+	Null   []string
+	String []string
+}
+
+func Lisp() *Lexic {
+	return &Lexic{
+		Punctuators: Punctuators{
+			[]string{"(", ")"}, "(", ")",
+		},
+		Keywords:  []string{"if", "defun"},
+		Operators: []string{">", "<", "=", "+", "-", "*", "/", ">=", "<="},
+		Literals: Literals{
+			True:   []string{"t", "T"},
+			Null:   []string{"nil"},
+			String: []string{"\""},
+		},
+	}
+}
 
 type TokenStream []*Token
 
@@ -43,16 +76,16 @@ func (s TokenStream) String() string {
 type Token struct {
 	TokenKind TokenKind
 	Value     []byte
-	Type      ResultType
 }
 
 type Tokenizer struct {
 	Input    string
+	Lexic    *Lexic
 	Position int
 }
 
-func tokenize(input string) iter.Seq[*Token] {
-	tokenizer := &Tokenizer{input, 0}
+func tokenize(input string, lexic *Lexic) iter.Seq[*Token] {
+	tokenizer := &Tokenizer{input, lexic, 0}
 	return tokenizer.tokenize0()
 }
 
@@ -65,9 +98,8 @@ func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 			t := coalesce(
 				tokenizer,
 				(*Tokenizer).scope,
+				(*Tokenizer).keyword,
 				(*Tokenizer).operator,
-				(*Tokenizer).declaration,
-				(*Tokenizer).condition,
 				(*Tokenizer).literal,
 				(*Tokenizer).identifier,
 			)
@@ -85,56 +117,51 @@ func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 }
 
 func (p *Tokenizer) scope() *Token {
-	if p.is('(') {
-		return &Token{ScopeOpen, p.drop(1), Unknown}
-	}
-	if p.is(')') {
-		return &Token{ScopeClose, p.drop(1), Unknown}
+	for _, s := range p.Lexic.Punctuators.All {
+		if p.are(s) {
+			return &Token{Punctuator, p.drop(len(s))}
+		}
 	}
 	return nil
 }
 
 func (p *Tokenizer) operator() *Token {
-	if p.is('+') || p.is('-') || p.is('*') || p.is('/') {
-		return &Token{Operator, p.drop(1), Int}
-	}
-	if p.is('<') || p.is('>') || p.is('=') {
-		return &Token{Operator, p.drop(1), Boolean}
-	}
-	if p.are("<=") || p.are(">=") {
-		return &Token{Operator, p.drop(2), Boolean}
+	for _, s := range p.Lexic.Operators {
+		if p.are(s) {
+			return &Token{Operator, p.drop(len(s))}
+		}
 	}
 	return nil
 }
 
-func (p *Tokenizer) condition() *Token {
-	if p.are("if ") || p.are("if(") {
-		return &Token{Keyword, p.drop(2), Unknown}
-	}
-	return nil
-}
-
-func (p *Tokenizer) declaration() *Token {
-	// when check include whitespace
-	if p.are("defun ") {
-		return &Token{Keyword, p.drop(len("defun")), Unknown}
+func (p *Tokenizer) keyword() *Token {
+	for _, s := range p.Lexic.Keywords {
+		if p.are(s+" ") || p.are(s+"(") {
+			return &Token{Keyword, p.drop(len(s))}
+		}
 	}
 	return nil
 }
 
 func (p *Tokenizer) literal() *Token {
-	if p.is('"') {
-		p.drop(1)
-		length := p.whilent([]byte{'"'})
-		return &Token{Literal, slices.Concat([]byte{'"'}, p.drop(length+1)), String}
+
+	for _, s := range p.Lexic.Literals.String {
+		if p.are(s) {
+			length := p.whilent([]byte{s[0]}, 1)
+			return &Token{Literal, p.drop(length + 1)}
+		}
 	}
-	if p.are("t ") || p.are("T ") {
-		p.drop(1)
-		return &Token{Literal, []byte{1}, Boolean}
+	// can be end of expression
+	for _, s := range p.Lexic.Literals.True {
+		if p.are(s+" ") || p.are(s+")") {
+			return &Token{Literal, p.drop(len(s))}
+		}
 	}
-	if p.are("nil ") {
-		p.drop(3)
-		return &Token{Literal, []byte{0}, Boolean}
+	// can be end of expression
+	for _, s := range p.Lexic.Literals.Null {
+		if p.are(s+" ") || p.are(s+")") {
+			return &Token{Literal, p.drop(len(s))}
+		}
 	}
 	// are numbers = literal
 	digits := p.while(unicode.IsDigit)
@@ -145,7 +172,7 @@ func (p *Tokenizer) literal() *Token {
 		if err != nil {
 			log.Println("Error: unable to convert", s, "to int:", err)
 		}
-		return &Token{Literal, int32_to_bytes(i), Int}
+		return &Token{Literal, int32_to_bytes(i)}
 	}
 	return nil
 }
@@ -157,7 +184,7 @@ func (p *Tokenizer) identifier() *Token {
 		length := p.while(func(r rune) bool {
 			return unicode.IsDigit(r) || unicode.IsLetter(r)
 		})
-		return &Token{Identifier, p.drop(length), Unknown}
+		return &Token{Identifier, p.drop(length)}
 	}
 	return nil
 }
@@ -183,8 +210,8 @@ func (p *Tokenizer) are(chars string) bool {
 	return true
 }
 
-func (p *Tokenizer) whilent(chars []byte) int {
-	i := p.Position
+func (p *Tokenizer) whilent(chars []byte, skip int) int {
+	i := p.Position + skip
 	for i < len(p.Input) && slices.Index(chars, p.Input[i]) == -1 {
 		i += 1
 	}
@@ -214,11 +241,4 @@ func (p *Tokenizer) trim() {
 	for p.is(' ') || p.is('\n') {
 		p.drop(1)
 	}
-}
-
-func value_to_string(data []byte) string {
-	if len(data) == 4 && unicode.IsDigit(rune(data[0])) && unicode.IsDigit(rune(data[1])) && unicode.IsDigit(rune(data[2])) && unicode.IsDigit(rune(data[3])) {
-		return strconv.Itoa(bytes_to_int32(data))
-	}
-	return string(data)
 }

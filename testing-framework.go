@@ -94,7 +94,7 @@ func evaluate_test_case[T int | bool | string](name string, index int, element T
 	s := wrap_test(index, name, element.input)
 	defer s.Close()
 	for sub_element := range subs {
-		ast, _ := ParseAst(sub_element)
+		ast, _ := ParseAst(sub_element, Lisp())
 		nodes = append(nodes, ast.Root)
 		r := runtime.EvaluateAst(ast)
 		results = append(results, r)
