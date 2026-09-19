@@ -36,5 +36,15 @@ func value_to_string(data []byte) string {
 		}
 	}
 	return n
+}
 
+func coalesce[TIn any, TOut comparable](in TIn, nodes ...func(TIn) TOut) TOut {
+	var zero TOut
+	for _, f := range nodes {
+		n := f(in)
+		if n != zero {
+			return n
+		}
+	}
+	return zero
 }

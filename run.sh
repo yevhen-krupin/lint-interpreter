@@ -1,1 +1,1 @@
-go build && ./lisp-interpreter
+go test && go build && ./lisp-interpreter

@@ -49,6 +49,7 @@ func (p *Parser) atom_node() *Node {
 	)
 }
 
+// todo: this might be only correct for lisp, other languages can be split by newline/semicolon
 func (p *Parser) expression_node() *Node {
 	if p.eq(p.Lexic.Punctuators.Open) {
 		p.eat()
