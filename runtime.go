@@ -101,8 +101,8 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 	}
 
 	// operators
-	if node.Kind == Expression && len(node.Nodes) == 1 && node.Nodes[0].Kind == BinaryOperator {
-		oper := node.Nodes[0]
+	if node.Kind == BinaryOperator {
+		oper := node
 		if oper.Value[0] == '+' {
 			return r.binary_operator(oper, func(a, b EvaluationResult) EvaluationResult {
 				return EvaluationResult{Int, a.Value.(int) + b.Value.(int), nil}

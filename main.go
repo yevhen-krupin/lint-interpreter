@@ -73,6 +73,7 @@ func main() {
 			{"(/ 6 3)", 2},
 			{"(- 1 1)", 0},
 			{"(- 1 2)", -1},
+			{"- 1 2", -1},
 			{"(defun doublen (n) (* n 2))\n (doublen 2)", 4},
 		}),
 		evaluate_test("conditional int evaluation", []TestCase[int]{
