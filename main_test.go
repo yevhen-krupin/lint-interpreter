@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -40,7 +39,9 @@ func TestTokenizer(tt *testing.T) {
 
 	for index, element := range cases {
 		tt.Run(fmt.Sprintf("tokenizer_test [%d] %v", index, element.input), func(t *testing.T) {
-			s := wrap_test(index, "tokenizer_test")
+
+			file := fmt.Sprintf("%v_%v.log", "tokenizer_test", index)
+			s := to_disk(TEST_DIR, file)
 			defer s.Close()
 			tokens := slices.Collect(tokenize(element.input, Lisp()))
 			if !eq(tokens, element.output) {
@@ -192,13 +193,6 @@ func TestEvaluation(tt *testing.T) {
 
 }
 
-func print(node *Node, indent string) {
-	log.Println(indent, node.Kind, "-", node.Type, ":", node.Value, "[", value_to_string(node.Value), "]")
-	for _, n := range node.Nodes {
-		print(n, indent+"  ")
-	}
-}
-
 func so() *Token {
 	return &Token{Punctuator, []byte{'('}}
 }
@@ -259,40 +253,6 @@ type TestCase[T int | bool | string | []*Token] struct {
 type TestResult struct {
 	pass int
 	fail int
-}
-
-type Closeable interface {
-	Close()
-}
-
-type TestScope struct {
-	f *os.File
-}
-
-func (t TestScope) Close() {
-	t.f.Close()
-	log.SetOutput(os.Stdout)
-}
-
-func wrap_test(index int, name string) TestScope {
-	if _, err := os.Stat(TEST_DIR); err != nil {
-		if os.IsNotExist(err) {
-			if os.MkdirAll(TEST_DIR, 0777) != nil {
-				log.Fatal("error making a dir")
-			}
-		}
-	}
-	file := fmt.Sprintf("%v/%v_%v.log", TEST_DIR, strings.ReplaceAll(name, " ", "_"), index)
-	if _, err := os.Stat(file); err == nil {
-		os.Remove(file)
-	}
-	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
-	}
-
-	log.SetOutput(f)
-	return TestScope{f}
 }
 
 func evaluate_test_case[T int | bool | string](name string, index int, element TestCase[T]) (EvaluationResult, string) {

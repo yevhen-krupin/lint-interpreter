@@ -1,6 +1,9 @@
 package main
 
-import "log"
+import (
+	"fmt"
+	"log"
+)
 
 // "fmt"
 
@@ -16,7 +19,6 @@ const (
 
 type Kind string
 
-// todo: add more kinds: argument, body, call site
 const (
 	Expression       Kind = "Expression"
 	Atom             Kind = "Atom"
@@ -41,6 +43,13 @@ func node(kind Kind, value []byte, rt ResultType, nodes []*Node) *Node {
 	node.Value = value
 	node.Nodes = nodes
 
-	log.Println("node", &node, ": kind ", kind, " | type ", rt, "| value ", string(value), " | nodes", nodes)
+	log.Println("node", fmt.Sprintf("%p", &node), ": kind ", kind, " | type ", rt, "| value ", string(value), " | nodes", nodes)
 	return &node
+}
+
+func print(node *Node, indent string) {
+	log.Println(indent, node.Kind, "-", node.Type, ":", node.Value, "[", value_to_string(node.Value), "]")
+	for _, n := range node.Nodes {
+		print(n, indent+"  ")
+	}
 }
