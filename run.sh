@@ -1,1 +1,1 @@
-go test && go build && ./lisp-interpreter
+go test && go build && ./lisp-interpreter -o build/test/work #--input "(defun fib (n)  (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))\n (fib 2)"
