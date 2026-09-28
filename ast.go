@@ -7,25 +7,23 @@ import (
 )
 
 type Parser struct {
-	Functions *[]FunctionEntry
-	Errors    *[]error
-	Position  int
-	Input     []*Token
-	Lexic     *Lexic
+	SymbolTable *SymbolTable
+	Errors      *[]error
+	Position    int
+	Input       []*Token
+	Lexic       *Lexic
 }
 
-type Ast struct {
-	Functions *[]FunctionEntry
-	Root      *Node
+type SymbolTable struct {
+	Functions *map[string]FunctionEntry
 }
 
-func ParseAst(input string, lexic *Lexic) (Ast, []error) {
+func ParseAst(input string, symbolTable *SymbolTable, lexic *Lexic) (*Node, []error) {
 	data := slices.Collect(tokenize(input, lexic))
-	p := Parser{&[]FunctionEntry{}, &[]error{}, 0, data, lexic}
+	p := Parser{symbolTable, &[]error{}, 0, data, lexic}
 	log.Println(TokenStream(data))
 	node := p.atom_node()
-
-	return Ast{p.Functions, node}, *p.Errors
+	return node, *p.Errors
 }
 
 func (p *Parser) atom_node() *Node {
@@ -44,6 +42,7 @@ func (p *Parser) atom_node() *Node {
 
 		// extract binary operators
 		(*Parser).binary_operator_node,
+		(*Parser).identifier,
 		//fallback
 		(*Parser).undefined_node,
 	)
@@ -97,16 +96,20 @@ func (p *Parser) literal_node() *Node {
 	if p.peek().TokenKind == Literal {
 		token := p.eat()
 		if looks_like_string(token.Value, p.Lexic.Literals.String) {
+			log.Println("literal string", token)
 			return node(Atom, token.Value, String, []*Node{})
 		}
 		// not string - can distinguish by size
 		if len(token.Value) == 4 {
+			log.Println("literal int", token)
 			return node(Atom, token.Value, Int, []*Node{})
 		}
 		// only supported type left is boolean
 		if slices.Contains(p.Lexic.Literals.True, string(token.Value)) {
+			log.Println("literal bool", token)
 			return node(Atom, []byte{1}, Boolean, []*Node{})
 		}
+		log.Println("literal unknown", token)
 		return node(Atom, []byte{0}, Boolean, []*Node{})
 	}
 	return nil
@@ -114,7 +117,7 @@ func (p *Parser) literal_node() *Node {
 
 func (p *Parser) decl_node() *Node {
 	if p.peek().TokenKind == Keyword && p.eq("defun") {
-		p.eat()
+		log.Println("function declaration: discard", p.eat())
 		// we omit defun token, there is no value for node for it, we extract the callable symbol
 		// SymbolAtom
 		//  - Expression (arguments)
@@ -138,7 +141,7 @@ func (p *Parser) decl_node() *Node {
 		// reference beteween the nodes inside of the body to the arguments
 		p.setup_argument_references(body, arguments)
 
-		*p.Functions = append(*p.Functions, FunctionEntry{Name: string(name.Value), Body: body, Arguments: arguments})
+		(*p.SymbolTable.Functions)[string(name.Value)] = FunctionEntry{Name: string(name.Value), Body: body, Arguments: arguments}
 		return node(SymbolAtom, name.Value, body.Type, []*Node{arguments, body})
 	}
 	return nil
@@ -166,6 +169,14 @@ func (p *Parser) binary_operator_node() *Node {
 		operand1.Type = t
 		operand2.Type = t
 		return node(BinaryOperator, operator.Value, t, []*Node{operand1, operand2})
+	}
+	return nil
+}
+
+func (p *Parser) identifier() *Node {
+	if p.peek().TokenKind == Identifier {
+		// variable or function call, resolved at runtime
+		return node(SymbolAtom, p.eat().Value, Unknown, []*Node{})
 	}
 	return nil
 }

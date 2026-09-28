@@ -299,13 +299,16 @@ func evaluate_test_case[T int | bool | string](name string, index int, element T
 	results := []EvaluationResult{}
 	nodes := []*Node{}
 	subs := strings.SplitSeq(element.input, "\n")
-	runtime := NewRuntime()
-	s := wrap_test(index, name)
+
+	st := &SymbolTable{&map[string]FunctionEntry{}}
+	runtime := NewRuntime(st)
+	file := fmt.Sprintf("%v_%v.log", name, index)
+	s := to_disk(TEST_DIR, file)
 	defer s.Close()
 	for sub_element := range subs {
-		ast, _ := ParseAst(sub_element, Lisp())
-		print(ast.Root, "")
-		nodes = append(nodes, ast.Root)
+		ast, _ := ParseAst(sub_element, st, Lisp())
+		print(ast, "")
+		nodes = append(nodes, ast)
 		r := runtime.EvaluateAst(ast)
 		results = append(results, r)
 		if r.Error != nil {
@@ -314,7 +317,7 @@ func evaluate_test_case[T int | bool | string](name string, index int, element T
 	}
 	final := results[len(results)-1]
 
-	log.Println("Functions declared:", runtime.Functions)
+	log.Println("Functions declared:", runtime.SymbolTable.Functions)
 	for i, r := range results {
 		if i == len(results)-1 {
 			log.Println("Evaluated as", r.Type, r.Value, " but has to be", element.output)

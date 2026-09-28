@@ -8,8 +8,8 @@ import (
 )
 
 type Runtime struct {
-	Stack     *[]StackFrame
-	Functions *[]FunctionEntry
+	Stack       *[]StackFrame
+	SymbolTable *SymbolTable
 }
 
 type EvaluationResultValue any
@@ -28,7 +28,7 @@ type Argument struct {
 type StackFrame struct {
 	id        string
 	Function  string
-	Arguments []Argument
+	Arguments []*EvaluationResult
 }
 
 type FunctionEntry struct {
@@ -37,14 +37,13 @@ type FunctionEntry struct {
 	Arguments *Node
 }
 
-func NewRuntime() Runtime {
-	return Runtime{&[]StackFrame{}, &[]FunctionEntry{}}
+func NewRuntime(symbolTable *SymbolTable) Runtime {
+	return Runtime{&[]StackFrame{}, symbolTable}
 }
 
-func (r Runtime) EvaluateAst(ast Ast) EvaluationResult {
-	*r.Functions = append(*r.Functions, *ast.Functions...)
-	*r.Stack = []StackFrame{{Function: "__entry_point", Arguments: []Argument{}}}
-	return r.evaluate(ast.Root)
+func (r Runtime) EvaluateAst(ast *Node) EvaluationResult {
+	*r.Stack = []StackFrame{{Function: "__entry_point", Arguments: []*EvaluationResult{}}}
+	return r.evaluate(ast)
 }
 
 func (r Runtime) last_frame() StackFrame {
@@ -92,11 +91,17 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 		return EvaluationResult{arg_value.Type, arg_value.Value, nil}
 	}
 	// call function
-	if node.Kind == Expression && len(node.Nodes) > 0 && node.Nodes[0].Kind == Atom {
-		for _, f := range *r.Functions {
-			if f.Name == string(node.Nodes[0].Value) {
-				return r.call_function(node, f)
+	if node.Kind == Expression && len(node.Nodes) > 0 && node.Nodes[0].Kind == SymbolAtom {
+		if f, ok := (*r.SymbolTable.Functions)[string(node.Nodes[0].Value)]; ok {
+			resolved := []*EvaluationResult{}
+			for i, n := range node.Nodes {
+				if i > 0 {
+					arg := r.evaluate(n)
+					log.Println("resolved argument", n, arg)
+					resolved = append(resolved, &arg)
+				}
 			}
+			return r.call_function(string(node.Nodes[0].Value), resolved, f.Arguments, f.Body)
 		}
 	}
 
@@ -145,10 +150,11 @@ func (r Runtime) evaluate(node *Node) EvaluationResult {
 		return r.evaluate(node.Nodes[0])
 	}
 
-	return EvaluationResult{Unknown, nil, nil}
+	return EvaluationResult{Unknown, nil, fmt.Errorf("unrecognized node %v", node)}
 }
 
 func (r Runtime) binary_operator(node *Node, f func(EvaluationResult, EvaluationResult) EvaluationResult) EvaluationResult {
+	log.Println("evaluating binary operator", node)
 	a := r.operand(node, 0)
 	b := r.operand(node, 1)
 	if a.Error != nil || b.Error != nil {
@@ -158,37 +164,27 @@ func (r Runtime) binary_operator(node *Node, f func(EvaluationResult, Evaluation
 }
 
 func (r Runtime) operand(node *Node, index int) EvaluationResult {
+	log.Println("evaluating operand", node.Nodes[index])
 	return r.evaluate(node.Nodes[index])
 }
 
 // node: symbol atom of call site
 // first child is a function, followed by the arguments
-func (r Runtime) call_function(node *Node, function FunctionEntry) EvaluationResult {
-	name := string(node.Nodes[0].Value)
-	args := []Argument{}
-	for i := 1; i < len(node.Nodes); i++ {
-		res := r.evaluate(node.Nodes[i])
-		if res.Error != nil {
-			//todo: probably worth wrapping with more context
-			return res
-		}
-		arg := Argument{res.Value, res.Type}
-		args = append(args, arg)
-	}
-	// evaluate arguments
-	if len(function.Arguments.Nodes) != len(args) {
-		return EvaluationResult{Error: fmt.Errorf("arguments count provided to the function `%v` don't match declared function, expected: %d, actual: %d", name, len(function.Arguments.Nodes), len(args))}
+func (r Runtime) call_function(name string, args []*EvaluationResult, functionArguments *Node, functionBody *Node) EvaluationResult {
+	// check arguments
+	if len(functionArguments.Nodes) != len(args) {
+		return EvaluationResult{Error: fmt.Errorf("arguments count provided to the function `%v` don't match declared function, expected: %d, actual: %d", name, len(functionArguments.Nodes), len(args))}
 	}
 	for i := 0; i < len(args); i++ {
-		if args[i].Type != function.Arguments.Nodes[i].Type {
-			return EvaluationResult{Error: fmt.Errorf("the argument %v type provided to the function `%v` doesn't match declared function's argument type, expected: %v, actual: %v", string(function.Arguments.Nodes[i].Value), name, function.Arguments.Nodes[i].Type, args[i].Type)}
+		if args[i].Type != functionArguments.Nodes[i].Type {
+			return EvaluationResult{Error: fmt.Errorf("the argument %v type provided to the function `%v` doesn't match declared function's argument type, expected: %v, actual: %v", string(functionArguments.Nodes[i].Value), name, functionArguments.Nodes[i].Type, args[i].Type)}
 		}
 	}
 
-	log.Println("calling function", name, "args", args, "body", function.Body)
+	log.Println("calling function", name, "args", args, "body", functionBody)
 	frame := StackFrame{uuid.New().String(), name, args}
 	*r.Stack = append(*r.Stack, frame)
-	res := r.evaluate(function.Body)
+	res := r.evaluate(functionBody)
 	top := (*r.Stack)[len(*r.Stack)-1]
 	if top.id != frame.id {
 		panic("unexpected state: the stack frame after leaving the function is not correct")
