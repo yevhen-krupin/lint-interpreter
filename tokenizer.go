@@ -44,8 +44,9 @@ func Lisp() *Lexic {
 		Punctuators: Punctuators{
 			[]string{"(", ")"}, "(", ")",
 		},
-		Keywords:  []string{"if", "defun"},
-		Operators: []string{">", "<", "=", "+", "-", "*", "/", ">=", "<="},
+		Keywords: []string{"if", "defun"},
+		// note: longest operators first
+		Operators: []string{">=", "<=", ">", "<", "=", "+", "-", "*", "/"},
 		Literals: Literals{
 			True:   []string{"t", "T"},
 			Null:   []string{"nil"},

@@ -15,22 +15,23 @@ func TestTokenizer(tt *testing.T) {
 		{"255", t(d(255))},
 		{"256", t(d(256))},
 		{"16777217", t(d(16777217))},
-		{"(+ 1 2)", t(so(), oi('+'), d(1), d(2), sc())},
-		{"(- 1 2)", t(so(), oi('-'), d(1), d(2), sc())},
-		{"(* 1 2)", t(so(), oi('*'), d(1), d(2), sc())},
-		{"(/ 1 2)", t(so(), oi('/'), d(1), d(2), sc())},
-		{"(/1 2)", t(so(), oi('/'), d(1), d(2), sc())},
-		{"(/ 1 2 )", t(so(), oi('/'), d(1), d(2), sc())},
-		{"( / 1 2)", t(so(), oi('/'), d(1), d(2), sc())},
-		{"(defun doublen (n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
-		{"(defun doublen(n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
-		{"(defun doublen (n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
-		{"(defun doublen(n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
-		{"(defun doublen (n) (*n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
-		{"(defun doublen (n) (* n 2)   )", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc())},
+		{"(+ 1 2)", t(so(), o("+"), d(1), d(2), sc())},
+		{"(- 1 2)", t(so(), o("-"), d(1), d(2), sc())},
+		{"(* 1 2)", t(so(), o("*"), d(1), d(2), sc())},
+		{"(/ 1 2)", t(so(), o("/"), d(1), d(2), sc())},
+		{"(/1 2)", t(so(), o("/"), d(1), d(2), sc())},
+		{"(/ 1 2 )", t(so(), o("/"), d(1), d(2), sc())},
+		{"( / 1 2)", t(so(), o("/"), d(1), d(2), sc())},
+		{"(defun fact (n) (if (<= n 1) 1 (* n (fact (- n 1)))))", t(so(), f(), i("fact"), so(), i("n"), sc(), so(), kw("if"), so(), o("<="), i("n"), d(1), sc(), d(1), so(), o("*"), i("n"), so(), i("fact"), so(), o("-"), i("n"), d(1), sc(), sc(), sc(), sc(), sc())},
+		{"(defun doublen (n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o("*"), i("n"), d(2), sc(), sc())},
+		{"(defun doublen(n) (* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o("*"), i("n"), d(2), sc(), sc())},
+		{"(defun doublen (n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o("*"), i("n"), d(2), sc(), sc())},
+		{"(defun doublen(n)(* n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o("*"), i("n"), d(2), sc(), sc())},
+		{"(defun doublen (n) (*n 2))", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o("*"), i("n"), d(2), sc(), sc())},
+		{"(defun doublen (n) (* n 2)   )", t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o("*"), i("n"), d(2), sc(), sc())},
 		{
 			"(defun doublen (n) (* n 2))\n (doublen 2)",
-			t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), oi('*'), i("n"), d(2), sc(), sc(), so(), i("doublen"), d(2), sc()),
+			t(so(), f(), i("doublen"), so(), i("n"), sc(), so(), o("*"), i("n"), d(2), sc(), sc(), so(), i("doublen"), d(2), sc()),
 		},
 		{"\"Hello, Coding Challenges\"",
 			t(s("\"Hello, Coding Challenges\""))},
@@ -193,6 +194,10 @@ func TestEvaluation(tt *testing.T) {
 
 }
 
+func kw(s string) *Token {
+	return &Token{Keyword, []byte(s)}
+}
+
 func so() *Token {
 	return &Token{Punctuator, []byte{'('}}
 }
@@ -201,8 +206,8 @@ func sc() *Token {
 	return &Token{Punctuator, []byte{')'}}
 }
 
-func oi(ch byte) *Token {
-	return &Token{Operator, []byte{ch}}
+func o(op string) *Token {
+	return &Token{Operator, []byte(op)}
 }
 
 func t(args ...*Token) []*Token {
