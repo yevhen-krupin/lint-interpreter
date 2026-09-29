@@ -29,13 +29,12 @@ func value_to_string(data []byte) string {
 	if len(data) != 4 {
 		return string(data)
 	}
-	n := strconv.Itoa(bytes_to_int32(data))
-	for _, ch := range n {
-		if !unicode.IsDigit(ch) {
+	for _, ch := range data {
+		if !unicode.IsDigit(rune(ch)) {
 			return string(data)
 		}
 	}
-	return n
+	return strconv.Itoa(bytes_to_int32(data))
 }
 
 func coalesce[TIn any, TOut comparable](in TIn, nodes ...func(TIn) TOut) TOut {
