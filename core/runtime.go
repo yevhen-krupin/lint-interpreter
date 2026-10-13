@@ -11,6 +11,7 @@ var ops atomic.Uint64
 type Runtime struct {
 	Stack       *[]StackFrame
 	SymbolTable *SymbolTable
+	MaxStack    int
 }
 
 type EvaluationResultValue any
@@ -38,8 +39,8 @@ type FunctionEntry struct {
 	Arguments *Node
 }
 
-func NewRuntime() Runtime {
-	return Runtime{&[]StackFrame{}, &SymbolTable{Functions: &map[string]FunctionEntry{}}}
+func NewRuntime(maxStack int) Runtime {
+	return Runtime{&[]StackFrame{}, &SymbolTable{Functions: &map[string]FunctionEntry{}}, maxStack}
 }
 
 func (r Runtime) EvaluateAst(ast *Node) EvaluationResult {
@@ -172,6 +173,10 @@ func (r Runtime) operand(node *Node, index int) EvaluationResult {
 // node: symbol atom of call site
 // first child is a function, followed by the arguments
 func (r Runtime) call_function(name string, args []*EvaluationResult, functionArguments *Node, functionBody *Node) EvaluationResult {
+	//interrupt to max stack
+	if r.MaxStack < len(*r.Stack) {
+		return EvaluationResult{Error: fmt.Errorf("Reached max stack depth %v, please increase MaxStack to avoid this error", r.MaxStack)}
+	}
 	// check arguments
 	if len(functionArguments.Nodes) != len(args) {
 		return EvaluationResult{Error: fmt.Errorf("arguments count provided to the function `%v` don't match declared function, expected: %d, actual: %d", name, len(functionArguments.Nodes), len(args))}
@@ -202,4 +207,8 @@ func first_error(input ...error) error {
 		}
 	}
 	return nil
+}
+
+func (e EvaluationResult) String() string {
+	return fmt.Sprintln("Evaluated @ type:", e.Type, "value:", e.Value, "error:", e.Error)
 }

@@ -186,7 +186,7 @@ func TestEvaluation(tt *testing.T) {
 			if r.Error != nil {
 				log.Println("Failed to evaluate due to", r.Error.Error())
 			} else {
-				log.Println("Evaluated as", r.Type, r.Value)
+				log.Println(r.String())
 				print(ast.Root, "")
 			}
 		}
@@ -265,7 +265,7 @@ func evaluate_test_case[T int | bool | string](name string, index int, element T
 	nodes := []*Node{}
 	subs := strings.SplitSeq(element.input, "\n")
 
-	runtime := NewRuntime()
+	runtime := NewRuntime(10)
 	file := fmt.Sprintf("%v_%v.log", name, index)
 	s := ToDisk(TEST_DIR, file)
 	defer s.Close()

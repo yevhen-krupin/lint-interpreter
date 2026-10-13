@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -33,7 +32,7 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer c.Close()
-	runtime := interpreter.NewRuntime()
+	runtime := interpreter.NewRuntime(15)
 	for {
 		mt, message, err := c.ReadMessage()
 		if err != nil {
@@ -45,7 +44,7 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		for _, ex := range expressions {
 			ast, _ := interpreter.ParseAst(strings.TrimLeft(ex, "\n"), runtime.SymbolTable, lisp)
 			r := runtime.EvaluateAst(ast)
-			err = c.WriteMessage(mt, []byte(fmt.Sprintln("Evaluated", r.Type, r.Value, r.Error)))
+			err = c.WriteMessage(mt, []byte(r.String()))
 		}
 		if err != nil {
 			log.Println("write:", err)
