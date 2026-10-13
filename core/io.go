@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"log"
@@ -21,8 +21,11 @@ func (t Scope) Close() {
 		log.Fatal(err)
 	}
 }
+func (t Scope) Name() string {
+	return t.f.Name()
+}
 
-func to_disk(dir string, file string) Scope {
+func ToDisk(dir string, file string) Scope {
 	if _, err := os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
 			if os.MkdirAll(dir, 0777) != nil {

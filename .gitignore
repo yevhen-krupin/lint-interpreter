@@ -1,2 +1,5 @@
 lisp-interpreter
+lisp-interpreter-cli
+server/list-repl-server
 build
+server/lisp-repl-server

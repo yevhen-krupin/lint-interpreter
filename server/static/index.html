@@ -1,0 +1,60 @@
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { background:#111; color:#ddd; font:14px monospace; }
+    .terminal { max-width:700px; margin:40px auto; background:#181818;
+      border:1px solid #333; border-radius:8px; padding:16px; }
+    #output { height:300px; overflow:auto; white-space:pre-wrap; }
+    input { background:none; border:0; outline:0; color:#7ee787;
+      font:inherit; width:90%; }
+  </style>
+</head>
+<body>
+<div class="terminal" x-data="repl()" x-init="connect()">
+  <div>● REPL <span x-text="connected ? 'connected' : 'disconnected'"></span></div>
+  <hr>
+  <div id="output" x-ref="output" x-text="output"></div>
+  <form @submit.prevent="send()">
+    <span style="color:#7ee787">❯</span>
+    <input x-model="command" x-ref="input" autofocus
+      autocomplete="off" placeholder="Enter expression...">
+  </form>
+</div>
+
+<script>
+function repl() {
+  return {
+    ws: null,
+    connected: false,
+    command: '',
+    output: '',
+
+    connect() {
+      const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.ws = new WebSocket(`${scheme}//${location.host}/repl`);
+      this.ws.onopen = () => this.connected = true;
+      this.ws.onclose = () => this.connected = false;
+      this.ws.onmessage = e => {
+        this.output += e.data;
+        this.$nextTick(() => {
+          this.$refs.output.scrollTop = this.$refs.output.scrollHeight;
+        });
+      };
+    },
+
+    send() {
+      const cmd = this.command;
+      if (!cmd.trim() || !this.connected) return;
+      this.output += `❯ ${cmd}\n`;
+      this.ws.send(cmd);
+      this.command = '';
+    }
+  };
+}
+</script>
+</body>
+</html>

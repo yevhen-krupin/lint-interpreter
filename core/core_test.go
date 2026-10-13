@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"fmt"
@@ -42,7 +42,7 @@ func TestTokenizer(tt *testing.T) {
 		tt.Run(fmt.Sprintf("tokenizer_test [%d] %v", index, element.input), func(t *testing.T) {
 
 			file := fmt.Sprintf("%v_%v.log", "tokenizer_test", index)
-			s := to_disk(TEST_DIR, file)
+			s := ToDisk(TEST_DIR, file)
 			defer s.Close()
 			tokens := slices.Collect(tokenize(element.input, Lisp()))
 			if !eq(tokens, element.output) {
@@ -265,13 +265,12 @@ func evaluate_test_case[T int | bool | string](name string, index int, element T
 	nodes := []*Node{}
 	subs := strings.SplitSeq(element.input, "\n")
 
-	st := &SymbolTable{&map[string]FunctionEntry{}}
-	runtime := NewRuntime(st)
+	runtime := NewRuntime()
 	file := fmt.Sprintf("%v_%v.log", name, index)
-	s := to_disk(TEST_DIR, file)
+	s := ToDisk(TEST_DIR, file)
 	defer s.Close()
 	for sub_element := range subs {
-		ast, _ := ParseAst(sub_element, st, Lisp())
+		ast, _ := ParseAst(sub_element, runtime.SymbolTable, Lisp())
 		print(ast, "")
 		nodes = append(nodes, ast)
 		r := runtime.EvaluateAst(ast)

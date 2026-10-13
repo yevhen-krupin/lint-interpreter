@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"fmt"
@@ -38,8 +38,8 @@ type FunctionEntry struct {
 	Arguments *Node
 }
 
-func NewRuntime(symbolTable *SymbolTable) Runtime {
-	return Runtime{&[]StackFrame{}, symbolTable}
+func NewRuntime() Runtime {
+	return Runtime{&[]StackFrame{}, &SymbolTable{Functions: &map[string]FunctionEntry{}}}
 }
 
 func (r Runtime) EvaluateAst(ast *Node) EvaluationResult {
