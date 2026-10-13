@@ -7,7 +7,7 @@ import (
 )
 
 type Closeable interface {
-	Close()
+	Close() error
 }
 
 type Scope struct {
@@ -15,8 +15,10 @@ type Scope struct {
 }
 
 func (t Scope) Close() {
-	t.f.Close()
 	log.SetOutput(os.Stdout)
+	if err := t.f.Close(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func to_disk(dir string, file string) Scope {
