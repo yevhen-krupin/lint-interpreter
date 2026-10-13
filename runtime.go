@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
-
-	"github.com/google/uuid"
+	"sync/atomic"
 )
+
+var ops atomic.Uint64
 
 type Runtime struct {
 	Stack       *[]StackFrame
@@ -26,7 +27,7 @@ type Argument struct {
 }
 
 type StackFrame struct {
-	id        string
+	id        uint64
 	Function  string
 	Arguments []*EvaluationResult
 }
@@ -182,7 +183,7 @@ func (r Runtime) call_function(name string, args []*EvaluationResult, functionAr
 	}
 
 	log.Println("calling function", name, "args", args, "body", functionBody)
-	frame := StackFrame{uuid.New().String(), name, args}
+	frame := StackFrame{ops.Add(1), name, args}
 	*r.Stack = append(*r.Stack, frame)
 	res := r.evaluate(functionBody)
 	top := (*r.Stack)[len(*r.Stack)-1]
