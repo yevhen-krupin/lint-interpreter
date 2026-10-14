@@ -1,60 +1,113 @@
-
 <!doctype html>
 <html>
+
 <head>
   <meta charset="utf-8">
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/persist@3.x.x/dist/cdn.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
-    body { background:#111; color:#ddd; font:14px monospace; }
-    .terminal { max-width:700px; margin:40px auto; background:#181818;
-      border:1px solid #333; border-radius:8px; padding:16px; }
-    #output { height:300px; overflow:auto; white-space:pre-wrap; }
-    input { background:none; border:0; outline:0; color:#7ee787;
-      font:inherit; width:90%; }
+    body {
+      background: #111;
+      color: #ddd;
+      font: 14px monospace;
+    }
+
+    .terminal {
+      max-width: 700px;
+      margin: 40px auto;
+      background: #181818;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    #output {
+      height: 300px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    input {
+      background: none;
+      border: 0;
+      outline: 0;
+      color: #7ee787;
+      font: inherit;
+      width: 90%;
+    }
   </style>
 </head>
+
 <body>
-<div class="terminal" x-data="repl()" x-init="connect()">
-  <div>● REPL <span x-text="connected ? 'connected' : 'disconnected'"></span></div>
-  <hr>
-  <div id="output" x-ref="output" x-text="output"></div>
-  <form @submit.prevent="send()">
-    <span style="color:#7ee787">❯</span>
-    <input x-model="command" x-ref="input" autofocus
-      autocomplete="off" placeholder="Enter expression...">
-  </form>
-</div>
+  <div class="terminal" x-data="repl()" x-init="connect()">
+    <div>● REPL <span x-text="connected ? 'connected' : 'disconnected'"></span></div>
+    <hr>
+    <div id="output" x-ref="output" x-text="output"></div>
+    <form @submit.prevent="send()">
+      <span style="color:#7ee787">❯</span>
+      <input x-model="command" x-ref="input" autofocus @keydown.up="up($event)" @keydown.down="down($event)"
+        autocomplete="off" placeholder="Enter expression...">
+    </form>
+  </div>
 
-<script>
-function repl() {
-  return {
-    ws: null,
-    connected: false,
-    command: '',
-    output: '',
+  <script>
+    function repl() {
+      return {
+        ws: null,
+        connected: false,
+        command: '',
+        output: '',
+        index: -1,
+        history: Alpine.$persist([]),
 
-    connect() {
-      const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      this.ws = new WebSocket(`${scheme}//${location.host}/repl`);
-      this.ws.onopen = () => this.connected = true;
-      this.ws.onclose = () => this.connected = false;
-      this.ws.onmessage = e => {
-        this.output += e.data;
-        this.$nextTick(() => {
-          this.$refs.output.scrollTop = this.$refs.output.scrollHeight;
-        });
+        up(e) {
+          if (this.index + 1 < this.history.length) {
+            this.command = this.history[this.index + 1]
+            this.index = this.index + 1
+          }
+          setTimeout(function () { e.target.selectionStart = e.target.selectionEnd = 10000; }, 0);
+        },
+        down(e) {
+          if (this.index - 1 >= 0) {
+            this.command = this.history[this.index - 1]
+            this.index = this.index - 1
+          } else {
+            this.command = ""
+            this.index = -1
+          }
+          setTimeout(function () { e.target.selectionStart = e.target.selectionEnd = 10000; }, 0);
+        },
+
+        connect() {
+          const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          this.ws = new WebSocket(`${scheme}//${location.host}/repl`);
+          this.ws.onopen = () => this.connected = true;
+          this.ws.onclose = () => this.connected = false;
+          this.ws.onmessage = e => {
+            this.output += e.data;
+            this.$nextTick(() => {
+              this.$refs.output.scrollTop = this.$refs.output.scrollHeight;
+            });
+          };
+        },
+
+        send() {
+          const cmd = this.command;
+          if (!cmd.trim() || !this.connected) return;
+          if (this.history.indexOf(cmd) < 0) {
+            this.history.unshift(cmd)
+            while (this.history.length > 20) {
+              this.history.pop()
+            }
+          }
+          this.index = -1;
+          this.output += `❯ ${cmd}\n`;
+          this.ws.send(cmd);
+          this.command = '';
+        }
       };
-    },
-
-    send() {
-      const cmd = this.command;
-      if (!cmd.trim() || !this.connected) return;
-      this.output += `❯ ${cmd}\n`;
-      this.ws.send(cmd);
-      this.command = '';
     }
-  };
-}
-</script>
+  </script>
 </body>
+
 </html>
