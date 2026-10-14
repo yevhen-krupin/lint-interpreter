@@ -95,6 +95,10 @@ func TestEvaluation(tt *testing.T) {
 		{"(if (= 2 2) 1 2)", 1},
 		{"(defun twoorthree (n) (if (= n 2) 2 3))\n (twoorthree 2)", 2},
 		{"(defun twoorthree (n) (if (= n 2) 2 3))\n (twoorthree 1)", 3},
+
+		// redeclare should take latest version
+		{"(defun twoorthree (n) (if (= n 2) 2 3))\n (defun twoorthree (n) (if (= n 2) 2 5))\n (twoorthree 1)", 5},
+
 		// fibonacci
 
 		{"(defun fib (n)" +
