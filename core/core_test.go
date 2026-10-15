@@ -10,6 +10,7 @@ import (
 
 func TestTokenizer(tt *testing.T) {
 	var cases []TestCase[[]*Token] = []TestCase[[]*Token]{
+		{";;comment", t(c(";;comment"))},
 		{"1", t(d(1))},
 		{"32", t(d(32))},
 		{"255", t(d(255))},
@@ -100,7 +101,6 @@ func TestEvaluation(tt *testing.T) {
 		{"(defun twoorthree (n) (if (= n 2) 2 3))\n (defun twoorthree (n) (if (= n 2) 2 5))\n (twoorthree 1)", 5},
 
 		// fibonacci
-
 		{"(defun fib (n)" +
 			"  (if (< n 2)" +
 			"      n" +
@@ -146,6 +146,10 @@ func TestEvaluation(tt *testing.T) {
 			"      n" +
 			"      (+ (fib (- n 1)) (fib (- n 2)))))" +
 			"\n (fib 8)", 21},
+
+		// comments
+		{";; comment whatever\n5", 5},
+		{";; comment whatever\n5;; comment whatever", 5},
 	}
 
 	for index, element := range strings {
@@ -232,6 +236,10 @@ func i(s string) *Token {
 
 func s(s string) *Token {
 	return &Token{Literal, []byte(s)}
+}
+
+func c(c string) *Token {
+	return &Token{Comment, []byte(c)}
 }
 
 func eq(a []*Token, b []*Token) bool {

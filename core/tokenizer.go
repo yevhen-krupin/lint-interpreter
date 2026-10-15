@@ -18,42 +18,8 @@ const (
 	Punctuator TokenKind = "Punctuator"
 	Literal    TokenKind = "Literal"
 	Keyword    TokenKind = "Keyword"
+	Comment    TokenKind = "Comment"
 )
-
-type Lexic struct {
-	Keywords    []string
-	Punctuators Punctuators
-	Operators   []string
-	Literals    Literals
-}
-
-type Punctuators struct {
-	All   []string
-	Open  string
-	Close string
-}
-
-type Literals struct {
-	True   []string
-	Null   []string
-	String []string
-}
-
-func Lisp() *Lexic {
-	return &Lexic{
-		Punctuators: Punctuators{
-			[]string{"(", ")"}, "(", ")",
-		},
-		Keywords: []string{"if", "defun"},
-		// note: longest operators first
-		Operators: []string{">=", "<=", ">", "<", "=", "+", "-", "*", "/"},
-		Literals: Literals{
-			True:   []string{"t", "T"},
-			Null:   []string{"nil"},
-			String: []string{"\""},
-		},
-	}
-}
 
 type TokenStream []*Token
 
@@ -98,6 +64,7 @@ func (tokenizer *Tokenizer) tokenize0() iter.Seq[*Token] {
 			log.Println("input left:", tokenizer.Input[tokenizer.Position:len(tokenizer.Input)])
 			t := coalesce(
 				tokenizer,
+				(*Tokenizer).comment,
 				(*Tokenizer).scope,
 				(*Tokenizer).keyword,
 				(*Tokenizer).operator,
@@ -186,6 +153,16 @@ func (p *Tokenizer) identifier() *Token {
 			return unicode.IsDigit(r) || unicode.IsLetter(r)
 		})
 		return &Token{Identifier, p.drop(length)}
+	}
+	return nil
+}
+
+func (p *Tokenizer) comment() *Token {
+	for _, s := range p.Lexic.Comments.Line {
+		if p.are(s) {
+			length := p.whilent([]byte{'\n'}, 1)
+			return &Token{Comment, p.drop(length)}
+		}
 	}
 	return nil
 }
