@@ -3,3 +3,8 @@ lisp-interpreter-cli
 server/list-repl-server
 build
 server/lisp-repl-server
+ri/darm64cl
+ri/darm64cl.image
+ri/darwinarm64.tar.gz
+.gitignore
+ri/darwin-arm64-headers/
