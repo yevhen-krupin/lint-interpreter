@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -42,13 +43,29 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		expressions := strings.Split(string(message), "\\n")
 		log.Println("input provided", expressions)
 		for _, ex := range expressions {
-			ast, _ := interpreter.ParseAst(strings.TrimLeft(ex, "\n"), runtime.SymbolTable, lisp)
+			ast, t, err := interpreter.ParseAst(strings.TrimLeft(ex, "\n"), runtime.SymbolTable, lisp)
 			r := runtime.EvaluateAst(ast)
-			err = c.WriteMessage(mt, []byte(r.String()))
+			resp := &Response{Tokens: t, Ast: ast, Result: r, ResultString: r.String(), Errors: err}
+			if ser, err := json.Marshal(resp); err != nil {
+				log.Println(err)
+			} else {
+				if err = c.WriteMessage(mt, ser); err != nil {
+					log.Println(err)
+				}
+			}
+
 		}
 		if err != nil {
 			log.Println("write:", err)
 			break
 		}
 	}
+}
+
+type Response struct {
+	Tokens       interpreter.TokenStream      `json:"tokens"`
+	Ast          *interpreter.Node            `json:"ast"`
+	Result       interpreter.EvaluationResult `json:"result"`
+	ResultString string                       `json:"resultString"`
+	Errors       []error                      `json:"errors"`
 }

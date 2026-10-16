@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 )
@@ -47,8 +48,17 @@ func node(kind Kind, value []byte, rt ResultType, nodes []*Node) *Node {
 	return &node
 }
 
+func (n *Node) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":  n.Type,
+		"kind":  n.Kind,
+		"value": value_to_any(n.Value),
+		"nodes": n.Nodes,
+	})
+}
+
 func print(node *Node, indent string) {
-	log.Println(indent, node.Kind, "-", node.Type, ":", node.Value, "[", value_to_string(node.Value), "]")
+	log.Println(indent, node.Kind, "-", node.Type, ":", node.Value, "[", value_to_any(node.Value), "]")
 	for _, n := range node.Nodes {
 		print(n, indent+"  ")
 	}

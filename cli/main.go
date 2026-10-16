@@ -51,7 +51,7 @@ func oneshot(expresion string) {
 	expressions := strings.Split(expresion, "\\n")
 	log.Println("expression provided", expressions)
 	for _, ex := range expressions {
-		ast, _ := interpreter.ParseAst(strings.TrimLeft(ex, "\n"), runtime.SymbolTable, lisp)
+		ast, _, _ := interpreter.ParseAst(strings.TrimLeft(ex, "\n"), runtime.SymbolTable, lisp)
 		r := runtime.EvaluateAst(ast)
 		log.Println(r.String())
 	}
@@ -64,7 +64,7 @@ func file(input string) {
 		expressions := strings.Split(str, "\n")
 		log.Println("file input provided", input, "content:", strings.Join(expressions, ","))
 		for _, ex := range expressions {
-			ast, _ := interpreter.ParseAst(strings.TrimLeft(ex, "\n"), runtime.SymbolTable, lisp)
+			ast, _, _ := interpreter.ParseAst(strings.TrimLeft(ex, "\n"), runtime.SymbolTable, lisp)
 			r := runtime.EvaluateAst(ast)
 			log.Println(r.String())
 		}
@@ -83,7 +83,7 @@ func repl() {
 		if err != nil {
 			fmt.Println(err)
 		} else {
-			ast, _ := interpreter.ParseAst(string(sentence[:len(sentence)-1]), runtime.SymbolTable, lisp)
+			ast, _, _ := interpreter.ParseAst(string(sentence[:len(sentence)-1]), runtime.SymbolTable, lisp)
 			print(ast, "")
 			r := runtime.EvaluateAst(ast)
 			fmt.Println("Evaluated", r.Type, r.Value, r.Error)

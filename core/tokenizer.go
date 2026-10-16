@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 	"log"
@@ -23,15 +24,18 @@ const (
 
 type TokenStream []*Token
 
+func (t Token) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"kind":  t.TokenKind,
+		"value": value_to_any(t.Value),
+	})
+}
+
 func (s TokenStream) String() string {
 	var sb strings.Builder
 	sb.WriteRune('[')
 	for i, e := range s {
-		sb.WriteRune('(')
-		sb.WriteString(string(e.TokenKind))
-		sb.WriteString(",'")
-		sb.WriteString(value_to_string(e.Value))
-		sb.WriteString("')")
+		sb.WriteString(fmt.Sprintf("(%v,'%v')", e.TokenKind, value_to_any(e.Value)))
 		if i < len(s)-1 {
 			sb.WriteRune(',')
 		}

@@ -188,7 +188,7 @@ func TestEvaluation(tt *testing.T) {
 	for index, element := range array {
 		runtime := NewRuntime()
 		for sub_element := range strings.SplitSeq(element, "\n") {
-			ast, _ := ParseAst(sub_element)
+			ast, _, _ := ParseAst(sub_element)
 			log.Println("Expression:", index, ": `", sub_element, "`")
 			r := runtime.EvaluateAst(ast)
 			if r.Error != nil {
@@ -282,7 +282,7 @@ func evaluate_test_case[T int | bool | string](name string, index int, element T
 	s := ToDisk(TEST_DIR, file)
 	defer s.Close()
 	for sub_element := range subs {
-		ast, _ := ParseAst(sub_element, runtime.SymbolTable, Lisp())
+		ast, _, _ := ParseAst(sub_element, runtime.SymbolTable, Lisp())
 		print(ast, "")
 		nodes = append(nodes, ast)
 		r := runtime.EvaluateAst(ast)

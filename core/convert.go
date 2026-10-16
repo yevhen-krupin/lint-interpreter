@@ -1,9 +1,8 @@
 package core
 
 import (
+	"log"
 	"slices"
-	"strconv"
-	"unicode"
 )
 
 func int32_to_bytes(i int) []byte {
@@ -25,16 +24,28 @@ func looks_like_string(data []byte, markers []string) bool {
 	return len(data) >= 2 && slices.Contains(markers, string(data[0])) && slices.Contains(markers, string(data[len(data)-1]))
 }
 
-func value_to_string(data []byte) string {
+func value_to_any(data []byte) any {
+	if len(data) == 1 {
+		if data[0] == 0 {
+			return false
+		}
+		if data[0] == 1 {
+			return true
+		}
+	}
 	if len(data) != 4 {
+		log.Println("str4", string(data))
 		return string(data)
 	}
 	for _, ch := range data {
-		if !unicode.IsDigit(rune(ch)) {
+		// only bytes of real numbers, not characters meaning digits
+		if ch > 9 {
+			log.Println("str", ch, rune(ch), string(data))
 			return string(data)
 		}
 	}
-	return strconv.Itoa(bytes_to_int32(data))
+	log.Println("int", bytes_to_int32(data))
+	return bytes_to_int32(data)
 }
 
 func coalesce[TIn any, TOut comparable](in TIn, nodes ...func(TIn) TOut) TOut {

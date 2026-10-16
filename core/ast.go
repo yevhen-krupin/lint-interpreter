@@ -18,12 +18,11 @@ type SymbolTable struct {
 	Functions *map[string]FunctionEntry
 }
 
-func ParseAst(input string, symbolTable *SymbolTable, lexic *Lexic) (*Node, []error) {
+func ParseAst(input string, symbolTable *SymbolTable, lexic *Lexic) (*Node, TokenStream, []error) {
 	data := slices.Collect(tokenize(input, lexic))
 	p := Parser{symbolTable, &[]error{}, 0, data, lexic}
-	log.Println(TokenStream(data))
 	node := p.atom_node()
-	return node, *p.Errors
+	return node, TokenStream(data), *p.Errors
 }
 
 func (p *Parser) atom_node() *Node {
